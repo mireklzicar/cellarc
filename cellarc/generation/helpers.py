@@ -9,7 +9,7 @@ import numpy as np
 
 
 def as_init(seq: Sequence[int]) -> np.ndarray:
-    """Convert a 1-D configuration into the 2-D row expected by CellPyLib."""
+    """Convert a 1-D configuration into a single-row array."""
     return np.array([list(seq)], dtype=int)
 
 

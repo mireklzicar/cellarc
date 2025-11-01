@@ -5,14 +5,12 @@ from __future__ import annotations
 import hashlib
 from typing import Dict, Tuple
 
-import cellpylib as cpl
-
 from ..utils import de_bruijn_cycle
-from .helpers import as_init
+from .cax_runner import evolve_rule_table
 
 
 def apply_rule_from_table(table: Dict[Tuple[int, ...], int]):
-    """Return a CellPyLib-compatible function for the provided rule table."""
+    """Return a callable that applies the provided rule table."""
     return lambda n, c, t: table[tuple(int(x) for x in n)]
 
 
@@ -21,13 +19,13 @@ def induced_tstep_fingerprint(table: Dict[Tuple[int, ...], int], k: int, r: int,
     width = 2 * r * t + 1
     cycle = de_bruijn_cycle(k, width)
     half = (width - 1) // 2
-    evolved = cpl.evolve(
-        as_init(cycle),
+    evolved = evolve_rule_table(
+        table,
+        cycle,
         timesteps=t + 1,
-        apply_rule=apply_rule_from_table(table),
-        r=r,
-        memoize=True,
-    )[-1].tolist()
+        alphabet_size=k,
+        radius=r,
+    ).tolist()
     length = len(cycle)
     mapping = {}
     for i in range(length):

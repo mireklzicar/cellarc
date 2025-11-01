@@ -1,9 +1,17 @@
 """Cellular automata generation utilities exposed as a package."""
 
+from .cax_runner import AutomatonRunner, evolve_rule_table, random_state
 from .constants import SCHEMA_VERSION
 from .dataset import generate_dataset_jsonl
 from .fingerprints import apply_rule_from_table, induced_tstep_fingerprint, rule_fingerprint
 from .helpers import as_init, enumerate_neighborhoods, neighborhood_index, ring_slice
+from .metrics import (
+    average_cell_entropy,
+    average_mutual_information,
+    joint_shannon_entropy,
+    mutual_information,
+    shannon_entropy,
+)
 from .morphology import quick_morphology_features
 from .rules import (
     rule_table_cyclic_excitable,
@@ -24,6 +32,14 @@ __all__ = [
     "sample_task_cellpylib",
     "lambda_bin",
     "entropy_bin",
+    "AutomatonRunner",
+    "evolve_rule_table",
+    "random_state",
+    "average_cell_entropy",
+    "average_mutual_information",
+    "shannon_entropy",
+    "joint_shannon_entropy",
+    "mutual_information",
     "apply_rule_from_table",
     "induced_tstep_fingerprint",
     "rule_fingerprint",

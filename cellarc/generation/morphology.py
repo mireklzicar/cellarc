@@ -6,10 +6,9 @@ import math
 import random
 from typing import Dict, List, Optional, Union
 
-import cellpylib as cpl
 import numpy as np
 
-from .fingerprints import apply_rule_from_table
+from .cax_runner import evolve_rule_table
 
 
 def quick_morphology_features(
@@ -28,14 +27,20 @@ def quick_morphology_features(
     and a Derrida-like sensitivity proxy.
     """
     rng = rng or random
-    apply = apply_rule_from_table(table)
 
     seed = rng.randrange(1 << 30)
     rng_np = np.random.default_rng(seed)
-    init = np.array([rng_np.integers(low=0, high=k, size=width, dtype=int)], dtype=int)
+    init = rng_np.integers(low=0, high=k, size=width, dtype=int)
     steps = max(t + 1, horizon)
-    ca = cpl.evolve(init, timesteps=steps, apply_rule=apply, r=r, memoize=True)
-    A = np.asarray(ca, dtype=int)
+    A = evolve_rule_table(
+        table,
+        init,
+        timesteps=steps,
+        alphabet_size=k,
+        radius=r,
+        return_history=True,
+        rng_seed=seed,
+    ).astype(int)
     if A.size == 0:
         return {
             "absorbing": True,
@@ -91,25 +96,23 @@ def quick_morphology_features(
     rng_np = np.random.default_rng(seed + 1)
     flip_indices = rng_np.choice(len(perturbed), size=flip_count, replace=False)
     perturbed[flip_indices] = (perturbed[flip_indices] + 1) % k
-    evo1 = np.asarray(
-        cpl.evolve(
-            np.array([last_row], dtype=int),
-            timesteps=perturb_steps,
-            apply_rule=apply,
-            r=r,
-            memoize=True,
-        ),
-        dtype=int,
+    evo1 = evolve_rule_table(
+        table,
+        last_row,
+        timesteps=perturb_steps,
+        alphabet_size=k,
+        radius=r,
+        return_history=True,
+        rng_seed=seed + 2,
     )
-    evo2 = np.asarray(
-        cpl.evolve(
-            np.array([perturbed], dtype=int),
-            timesteps=perturb_steps,
-            apply_rule=apply,
-            r=r,
-            memoize=True,
-        ),
-        dtype=int,
+    evo2 = evolve_rule_table(
+        table,
+        perturbed,
+        timesteps=perturb_steps,
+        alphabet_size=k,
+        radius=r,
+        return_history=True,
+        rng_seed=seed + 3,
     )
     diffs = [float(np.mean(frame1 != frame2)) for frame1, frame2 in zip(evo1, evo2)]
     if len(diffs) <= 1:

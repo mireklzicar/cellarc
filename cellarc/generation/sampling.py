@@ -4,18 +4,15 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 
-import cellpylib as cpl
+from .cax_runner import AutomatonRunner
 
 from ..utils import choose_r_t_for_W, de_bruijn_cycle
 from .constants import SCHEMA_VERSION
-from .fingerprints import (
-    apply_rule_from_table,
-    induced_tstep_fingerprint,
-    rule_fingerprint,
-)
-from .helpers import as_init, ring_slice
+from .fingerprints import induced_tstep_fingerprint, rule_fingerprint
+from .helpers import ring_slice
+from .metrics import average_cell_entropy, average_mutual_information
 from .morphology import quick_morphology_features
 from .rules import (
     rule_table_cyclic_excitable,
@@ -180,10 +177,14 @@ def sample_task_cellpylib(
     cycle = de_bruijn_cycle(k, W)
     length = len(cycle)
     half = (W - 1) // 2
-    rule = apply_rule_from_table(table)
-    full_out = cpl.evolve(
-        as_init(cycle), timesteps=t + 1, apply_rule=rule, r=r, memoize=True
-    )[-1].tolist()
+
+    runner = AutomatonRunner(
+        alphabet_size=k,
+        radius=r,
+        table=table,
+        rng_seed=episode_rng.randrange(1 << 30),
+    )
+    full_out = runner.evolve(cycle, timesteps=t + 1).tolist()
 
     episode_count = max(1, train_examples)
     if query_within_coverage:
@@ -231,17 +232,14 @@ def sample_task_cellpylib(
     avg_core = sum(lengths) // max(1, len(lengths))
     q_len = max(avg_core + W, avg_core + episode_rng.randint(W, 2 * W))
     query = [episode_rng.randrange(k) for _ in range(q_len)]
-    solution = cpl.evolve(
-        as_init(query), timesteps=t + 1, apply_rule=rule, r=r, memoize=True
-    )[-1].tolist()
+    solution = runner.evolve(query, timesteps=t + 1).tolist()
 
     width, horizon = complexity_rollout
     if compute_complexity:
-        ca_roll = cpl.evolve(
-            cpl.init_random(width, k=k), timesteps=horizon, apply_rule=rule, r=r, memoize=True
-        )
-        avg_cell_entropy = float(cpl.average_cell_entropy(ca_roll))
-        ami_1 = float(cpl.average_mutual_information(ca_roll, temporal_distance=1))
+        random_init = [episode_rng.randrange(k) for _ in range(width)]
+        ca_roll = runner.evolve(random_init, timesteps=horizon, return_history=True)
+        avg_cell_entropy = float(average_cell_entropy(ca_roll))
+        ami_1 = float(average_mutual_information(ca_roll, temporal_distance=1))
     else:
         avg_cell_entropy = None
         ami_1 = None
