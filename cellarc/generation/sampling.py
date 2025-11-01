@@ -35,7 +35,7 @@ def entropy_bin(H: float) -> str:
     return "low" if H < 0.25 else "mid" if H < 0.6 else "high"
 
 
-def sample_task_cellpylib(
+def sample_task(
     rng: random.Random,
     *,
     k_range=(2, 6),
@@ -52,6 +52,8 @@ def sample_task_cellpylib(
     compute_complexity: bool = True,
     annotate_morphology: bool = True,
     query_within_coverage: bool = False,
+    construction: str = "cycle",
+    unroll_tau_max: int = 24,
     schema_version: str = SCHEMA_VERSION,
     dataset_version: Optional[str] = None,
 ):
@@ -88,6 +90,10 @@ def sample_task_cellpylib(
                 raise RuntimeError(
                     "Failed to find feasible (r,t) for the given budget/caps."
                 )
+
+    construction = construction.lower()
+    if construction not in {"cycle", "unrolled", "hybrid"}:
+        raise ValueError("construction must be 'cycle', 'unrolled', or 'hybrid'.")
 
     fam_mix = family_mix or {
         "random": 0.35,
@@ -184,7 +190,19 @@ def sample_task_cellpylib(
         table=table,
         rng_seed=episode_rng.randrange(1 << 30),
     )
-    full_out = runner.evolve(cycle, timesteps=t + 1).tolist()
+    if construction == "cycle":
+        S_t_row = runner.evolve(cycle, timesteps=t + 1).tolist()
+        space_time: Optional[List[List[int]]] = None
+        tau_max = 0
+    else:
+        tau_max = max(0, min(unroll_tau_max, 256 - t))
+        history = runner.evolve(
+            cycle,
+            timesteps=tau_max + t + 1,
+            return_history=True,
+        )
+        space_time = history.tolist()
+        S_t_row = list(space_time[t])
 
     episode_count = max(1, train_examples)
     if query_within_coverage:
@@ -224,15 +242,67 @@ def sample_task_cellpylib(
         coverage_mode_effective = coverage_mode
 
     train_pairs: List[Tuple[List[int], List[int]]] = []
-    for start, seg_len in zip(starts, lengths):
-        x = ring_slice(cycle, start - half, seg_len + 2 * half)
-        y = ring_slice(full_out, start - half, seg_len + 2 * half)
+    train_spans: List[Dict[str, int]] = []
+    if construction == "cycle":
+        taus = [0] * len(lengths)
+    elif construction == "unrolled":
+        assert space_time is not None
+        max_tau_choice = tau_max
+        taus = [
+            episode_rng.randrange(0, max_tau_choice + 1) for _ in lengths
+        ]
+    else:  # construction == "hybrid"
+        assert space_time is not None
+        max_tau_choice = tau_max
+        taus = []
+        for idx, _ in enumerate(lengths):
+            if idx == 0 or max_tau_choice < 1:
+                taus.append(0)
+            else:
+                taus.append(episode_rng.randrange(1, max_tau_choice + 1))
+
+    for start, seg_len, tau in zip(starts, lengths, taus):
+        if construction == "cycle":
+            x = ring_slice(cycle, start - half, seg_len + 2 * half)
+            y = ring_slice(S_t_row, start - half, seg_len + 2 * half)
+        else:
+            assert space_time is not None
+            S_tau = space_time[tau]
+            S_tau_t = space_time[tau + t]
+            x = ring_slice(S_tau, start - half, seg_len + 2 * half)
+            y = ring_slice(S_tau_t, start - half, seg_len + 2 * half)
         train_pairs.append((x, y))
+        train_spans.append(
+            {"start": int(start), "length": int(seg_len), "time": int(tau)}
+        )
 
     avg_core = sum(lengths) // max(1, len(lengths))
     q_len = max(avg_core + W, avg_core + episode_rng.randint(W, 2 * W))
-    query = [episode_rng.randrange(k) for _ in range(q_len)]
-    solution = runner.evolve(query, timesteps=t + 1).tolist()
+    if construction == "cycle":
+        query = [episode_rng.randrange(k) for _ in range(q_len)]
+        solution = runner.evolve(query, timesteps=t + 1).tolist()
+        query_time = 0
+    else:
+        assert space_time is not None
+        query_time = episode_rng.choice(taus) if taus else 0
+        S_tau = space_time[query_time]
+        q_start = episode_rng.randrange(0, len(S_tau))
+        query = ring_slice(S_tau, q_start, q_len)
+        S_tau_t = space_time[query_time + t]
+        solution = ring_slice(S_tau_t, q_start, q_len)
+
+    def _observed_windows_count(window: int, pairs: List[Tuple[List[int], List[int]]]) -> int:
+        half_w = window // 2
+        seen = set()
+        for x, _ in pairs:
+            if len(x) < window:
+                continue
+            for idx in range(half_w, len(x) - half_w):
+                seen.add(tuple(x[idx - half_w : idx + half_w + 1]))
+        return len(seen)
+
+    observed_windows = _observed_windows_count(W, train_pairs)
+    observed_fraction = observed_windows / max(1, k ** W)
 
     width, horizon = complexity_rollout
     if compute_complexity:
@@ -285,6 +355,8 @@ def sample_task_cellpylib(
             "windows_total": k ** W,
             "train_context": half,
             "train_core_lengths": lengths,
+            "train_spans": train_spans,
+            "construction": construction,
             "family": family,
             "family_params": family_params,
             "lambda": float(lam_actual),
@@ -307,12 +379,15 @@ def sample_task_cellpylib(
                 "mode": coverage_mode_effective,
                 "query_within_coverage": bool(query_within_coverage),
                 "cycle_length": int(length),
+                "observed_windows": int(observed_windows),
+                "observed_fraction": float(observed_fraction),
             },
             "morphology": morphology,
+            "query_time": int(query_time),
         },
         "rule_table": rule_table_payload,
     }
     return record
 
 
-__all__ = ["entropy_bin", "lambda_bin", "sample_task_cellpylib"]
+__all__ = ["entropy_bin", "lambda_bin", "sample_task"]

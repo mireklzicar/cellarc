@@ -14,7 +14,7 @@ def _sequence_to_string(sequence: Sequence[int] | np.ndarray) -> str:
 
 
 def shannon_entropy(sequence: Sequence[int] | np.ndarray) -> float:
-    """Shannon entropy, mirroring CellPyLib's implementation."""
+    """Shannon entropy, mirroring our original implementation semantics."""
     string = _sequence_to_string(sequence)
     if not string:
         return 0.0

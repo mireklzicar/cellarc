@@ -15,7 +15,7 @@ except ImportError:  # pragma: no cover - fallback when tqdm is absent
     tqdm = None  # type: ignore
 
 from .constants import SCHEMA_VERSION
-from .sampling import sample_task_cellpylib
+from .sampling import sample_task
 
 
 def generate_dataset_jsonl(
@@ -132,7 +132,7 @@ def generate_dataset_jsonl(
                         "Attempt budget exceeded; relax caps or balancing."
                     )
 
-                rec = sample_task_cellpylib(
+                rec = sample_task(
                     rng,
                     k_range=k_range,
                     max_radius=max_radius,

@@ -11,7 +11,6 @@ from typing import Optional, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import gridspec
-from matplotlib.colors import ListedColormap
 from matplotlib.patches import FancyArrowPatch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -19,23 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:  # pragma: no cover
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from eval.common import prepare_episode, load_records, EpisodeRecord
-
-CMAP_HEX = [
-    "#252525",
-    "#0074D9",
-    "#FF4136",
-    "#37D449",
-    "#FFDC00",
-    "#E6E6E6",
-    "#F012BE",
-    "#FF871E",
-    "#54D2EB",
-    "#8D1D2C",
-    "#FFFFFF",
-]
-BG_COLOR = "#EEEFF6"
-PALETTE = ListedColormap(CMAP_HEX)
-PALETTE.set_bad(color=BG_COLOR)
+from cellarc.visualization.palette import BG_COLOR, CMAP_HEX, PALETTE
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:

@@ -23,13 +23,13 @@ from .rules import (
     rule_table_threshold,
     rule_table_totalistic,
 )
-from .sampling import entropy_bin, lambda_bin, sample_task_cellpylib
-from .serialization import serialize_rule_table
+from .sampling import entropy_bin, lambda_bin, sample_task
+from .serialization import deserialize_rule_table, serialize_rule_table
 
 __all__ = [
     "SCHEMA_VERSION",
     "generate_dataset_jsonl",
-    "sample_task_cellpylib",
+    "sample_task",
     "lambda_bin",
     "entropy_bin",
     "AutomatonRunner",
@@ -45,6 +45,7 @@ __all__ = [
     "rule_fingerprint",
     "quick_morphology_features",
     "serialize_rule_table",
+    "deserialize_rule_table",
     "as_init",
     "enumerate_neighborhoods",
     "neighborhood_index",

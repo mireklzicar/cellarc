@@ -24,7 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:  # pragma: no cover
 
 from cell_arc import EpisodeDataset, random_palette_mapping
 from eval.common import EpisodeRecord
-from viz.episode_viz import BG_COLOR, CMAP_HEX
+from cellarc.visualization.palette import BG_COLOR, CMAP_HEX
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:

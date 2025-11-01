@@ -145,7 +145,7 @@ class AutomatonRunner:
 
         Args:
             init_state: One-dimensional initial configuration.
-            timesteps: Number of rows to return, matching CellPyLib semantics.
+            timesteps: Number of rows to return, matching the original backend semantics.
             return_history: Whether to return the full space-time diagram.
 
         Returns:

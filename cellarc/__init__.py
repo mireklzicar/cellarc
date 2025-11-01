@@ -12,7 +12,7 @@ from .data import (
     load_manifest,
     random_palette_mapping,
 )
-from .generation import generate_dataset_jsonl, sample_task_cellpylib
+from .generation import generate_dataset_jsonl, sample_task
 from .signatures import batch_signatures, compute_signature, signatures_as_rows
 from .solver import LearnedLocalMap, learn_from_record, learn_local_map_from_pairs
 from .utils import de_bruijn_cycle, choose_r_t_for_W, window_size
@@ -29,7 +29,7 @@ __all__ = [
     "load_manifest",
     "random_palette_mapping",
     "generate_dataset_jsonl",
-    "sample_task_cellpylib",
+    "sample_task",
     "LearnedLocalMap",
     "learn_from_record",
     "learn_local_map_from_pairs",
