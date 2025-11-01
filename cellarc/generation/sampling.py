@@ -206,17 +206,16 @@ def sample_task(
 
     episode_count = max(1, train_examples)
     if query_within_coverage:
-        base = length // episode_count
-        rem = length % episode_count
-        lengths = [base + (1 if i < rem else 0) for i in range(episode_count)]
+        seg_len = max(W, math.ceil(length / episode_count))
+        lengths = [seg_len] * episode_count
         offset = episode_rng.randrange(length)
         starts: List[int] = []
         acc = offset
-        for seg_len in lengths:
+        for _ in lengths:
             starts.append(acc % length)
             acc += seg_len
-        windows_revealed = length
-        coverage_fraction_effective = 1.0
+        windows_revealed = min(length, seg_len * episode_count)
+        coverage_fraction_effective = min(1.0, windows_revealed / length)
         coverage_mode_effective = "full_cycle_partition"
     else:
         if not (0 < coverage_fraction <= 1.0):
@@ -224,9 +223,8 @@ def sample_task(
         target_windows = int(round(coverage_fraction * length))
         target_windows = max(W, episode_count, target_windows)
         target_windows = min(length, target_windows)
-        base = target_windows // episode_count
-        rem = target_windows % episode_count
-        lengths = [base + (1 if i < rem else 0) for i in range(episode_count)]
+        seg_len = max(W, math.ceil(target_windows / episode_count))
+        lengths = [seg_len] * episode_count
 
         if coverage_mode == "uniform":
             starts = [int((i * length) / episode_count) % length for i in range(episode_count)]
@@ -237,7 +235,7 @@ def sample_task(
         else:
             raise ValueError("coverage_mode must be 'chunked' or 'uniform'")
 
-        windows_revealed = sum(lengths)
+        windows_revealed = min(length, seg_len * episode_count)
         coverage_fraction_effective = float(min(1.0, windows_revealed / length))
         coverage_mode_effective = coverage_mode
 
@@ -276,8 +274,12 @@ def sample_task(
             {"start": int(start), "length": int(seg_len), "time": int(tau)}
         )
 
-    avg_core = sum(lengths) // max(1, len(lengths))
-    q_len = max(avg_core + W, avg_core + episode_rng.randint(W, 2 * W))
+    query_span: Optional[Dict[str, int]] = None
+    if lengths:
+        full_width = lengths[0] + 2 * half
+    else:
+        full_width = W + 2 * half
+    q_len = full_width
     if construction == "cycle":
         query = [episode_rng.randrange(k) for _ in range(q_len)]
         solution = runner.evolve(query, timesteps=t + 1).tolist()
@@ -290,6 +292,12 @@ def sample_task(
         query = ring_slice(S_tau, q_start, q_len)
         S_tau_t = space_time[query_time + t]
         solution = ring_slice(S_tau_t, q_start, q_len)
+        core_length = lengths[0] if lengths else W
+        query_span = {
+            "start": int(q_start),
+            "length": int(core_length),
+            "time": int(query_time),
+        }
 
     def _observed_windows_count(window: int, pairs: List[Tuple[List[int], List[int]]]) -> int:
         half_w = window // 2
@@ -356,6 +364,7 @@ def sample_task(
             "train_context": half,
             "train_core_lengths": lengths,
             "train_spans": train_spans,
+            **({"query_span": query_span} if query_span is not None else {}),
             "construction": construction,
             "family": family,
             "family_params": family_params,

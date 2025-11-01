@@ -2,18 +2,60 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
+import warnings
 from dataclasses import dataclass
-from typing import Sequence, Tuple
+from typing import Iterator, Sequence, Tuple
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 from flax import nnx
+from jax.errors import JaxRuntimeError
 
 from cax.core import ComplexSystem, Input, State
 from cax.core.perceive import ConvPerceive
 from cax.core.update import Update
 
 from .helpers import enumerate_neighborhoods
+
+def _env_flag(name: str, *, default: bool) -> bool:
+    """Parse an environment boolean flag with a sensible default."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+_FORCE_CPU = _env_flag("CELLARC_FORCE_CPU", default=True)
+_GPU_PROBE_FAILED = False
+_CUDA_INVALID_IMAGE_MARKERS = (
+    "CUDA_ERROR_INVALID_IMAGE",
+    "Failed to load in-memory CUBIN",
+)
+
+
+@contextlib.contextmanager
+def _cpu_device_scope() -> Iterator[None]:
+    """Temporarily pin JAX array placement to the first CPU device."""
+    cpu_devices = jax.devices("cpu")
+    if not cpu_devices:
+        yield
+        return
+    with jax.default_device(cpu_devices[0]):
+        yield
+
+
+def _is_cuda_invalid_image(error: Exception) -> bool:
+    """Return True if the error looks like a CUDA invalid image failure."""
+    msg = str(error)
+    return any(marker in msg for marker in _CUDA_INVALID_IMAGE_MARKERS)
 
 
 def _to_column_state(state: Sequence[int] | np.ndarray | jnp.ndarray) -> jnp.ndarray:
@@ -120,19 +162,44 @@ class AutomatonRunner:
     rng_seed: int = 0
 
     def __post_init__(self) -> None:
-        transitions, base_pows = _transition_arrays(
-            self.table,
-            alphabet_size=self.alphabet_size,
-            radius=self.radius,
-        )
-        self._rngs = nnx.Rngs(self.rng_seed)
-        self._automaton = RuleTableAutomaton(
-            radius=self.radius,
-            transitions=transitions,
-            base_pows=base_pows,
-            alphabet_size=self.alphabet_size,
-            rngs=self._rngs,
-        )
+        def _construct() -> tuple[nnx.Rngs, RuleTableAutomaton]:
+            transitions, base_pows = _transition_arrays(
+                self.table,
+                alphabet_size=self.alphabet_size,
+                radius=self.radius,
+            )
+            rngs = nnx.Rngs(self.rng_seed)
+            automaton = RuleTableAutomaton(
+                radius=self.radius,
+                transitions=transitions,
+                base_pows=base_pows,
+                alphabet_size=self.alphabet_size,
+                rngs=rngs,
+            )
+            return rngs, automaton
+
+        global _GPU_PROBE_FAILED
+        self._prefer_cpu = _FORCE_CPU or _GPU_PROBE_FAILED
+        if self._prefer_cpu:
+            with _cpu_device_scope():
+                self._rngs, self._automaton = _construct()
+            return
+
+        try:
+            self._rngs, self._automaton = _construct()
+        except JaxRuntimeError as err:
+            if not _is_cuda_invalid_image(err):
+                raise
+            _GPU_PROBE_FAILED = True
+            self._prefer_cpu = True
+            warnings.warn(
+                "Falling back to CPU execution for AutomatonRunner due to CUDA kernel load failure. "
+                "Set CELLARC_FORCE_CPU=0 to retry GPU execution.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            with _cpu_device_scope():
+                self._rngs, self._automaton = _construct()
 
     def evolve(
         self,
@@ -152,15 +219,17 @@ class AutomatonRunner:
             The final state if ``return_history`` is False, otherwise an array
             containing the initial state followed by each successive step.
         """
-        column_state = _to_column_state(init_state)
-        steps = max(0, timesteps - 1)
-        final_state = self._automaton(column_state, num_steps=steps, sow=return_history)
-        if return_history:
-            intermediates = nnx.pop(self._automaton, nnx.Intermediate)
-            evolution = intermediates.state.value[0]
-            trajectory = jnp.concatenate([column_state[None], evolution], axis=0)
-            return np.asarray(jnp.squeeze(trajectory, axis=-1), dtype=np.int32)
-        return np.asarray(jnp.squeeze(final_state, axis=-1), dtype=np.int32)
+        scope = _cpu_device_scope() if getattr(self, "_prefer_cpu", False) else contextlib.nullcontext()
+        with scope:
+            column_state = _to_column_state(init_state)
+            steps = max(0, timesteps - 1)
+            final_state = self._automaton(column_state, num_steps=steps, sow=return_history)
+            if return_history:
+                intermediates = nnx.pop(self._automaton, nnx.Intermediate)
+                evolution = intermediates.state.value[0]
+                trajectory = jnp.concatenate([column_state[None], evolution], axis=0)
+                return np.asarray(jnp.squeeze(trajectory, axis=-1), dtype=np.int32)
+            return np.asarray(jnp.squeeze(final_state, axis=-1), dtype=np.int32)
 
 
 def evolve_rule_table(

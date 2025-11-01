@@ -7,7 +7,7 @@ import argparse
 import json
 import random
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 
@@ -38,7 +38,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--train-examples",
         type=int,
-        default=4,
+        default=5,
         help="Training pair count per episode passed to sample_task (default: 4).",
     )
     parser.add_argument(
@@ -66,6 +66,11 @@ def parse_args() -> argparse.Namespace:
         help="Output path for the rendered episode card (default: artifacts/hybrid_episode0.png).",
     )
     parser.add_argument(
+        "--plot-all",
+        action="store_true",
+        help="Render a visual for every sampled episode using numbered filenames.",
+    )
+    parser.add_argument(
         "--plot-tau-max",
         type=int,
         default=48,
@@ -79,10 +84,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def generate_episodes(args: argparse.Namespace) -> Optional[dict]:
+def generate_episodes(
+    args: argparse.Namespace, *, collect_records: bool = True
+) -> List[Tuple[int, dict]]:
     rng = random.Random(args.seed)
     args.output_jsonl.parent.mkdir(parents=True, exist_ok=True)
-    target_record: Optional[dict] = None
+    records_to_plot: List[Tuple[int, dict]] = []
 
     with args.output_jsonl.open("w", encoding="utf-8") as sink:
         for idx in range(args.count):
@@ -92,32 +99,46 @@ def generate_episodes(args: argparse.Namespace) -> Optional[dict]:
                 construction=args.construction,
                 unroll_tau_max=args.tau_max,
             )
-            if idx == args.plot_index:
-                target_record = record
             sink.write(json.dumps(record) + "\n")
+            if not collect_records:
+                continue
+            if args.plot_all:
+                records_to_plot.append((idx, record))
+            elif idx == args.plot_index:
+                records_to_plot.append((idx, record))
 
     print(f"Wrote {args.count} episodes to {args.output_jsonl}")
-    return target_record
+    if collect_records and not args.plot_all and not records_to_plot:
+        raise ValueError(
+            f"plot-index {args.plot_index} is out of range for count {args.count}"
+        )
+    return records_to_plot
 
 
-def render_episode(record: dict, args: argparse.Namespace) -> None:
+def render_episode(
+    record: dict, args: argparse.Namespace, *, episode_index: Optional[int] = None
+) -> None:
     fig = show_episode_card(record, tau_max=args.plot_tau_max)
-    args.plot_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.plot_path, dpi=220, bbox_inches="tight")
+    suffix = args.plot_path.suffix or ".png"
+    if args.plot_all and episode_index is not None:
+        target_path = args.plot_path.with_name(
+            f"{args.plot_path.stem}_{episode_index:04d}{suffix}"
+        )
+    else:
+        target_path = args.plot_path
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(target_path, dpi=220, bbox_inches="tight")
     plt.close(fig)
-    print(f"Saved episode visual to {args.plot_path}")
+    print(f"Saved episode visual to {target_path}")
 
 
 def main() -> None:
     args = parse_args()
-    record = generate_episodes(args)
+    records = generate_episodes(args, collect_records=not args.skip_plot)
     if args.skip_plot:
         return
-    if record is None:
-        raise ValueError(
-            f"plot-index {args.plot_index} is out of range for count {args.count}"
-        )
-    render_episode(record, args)
+    for idx, record in records:
+        render_episode(record, args, episode_index=idx)
 
 
 if __name__ == "__main__":
