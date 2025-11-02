@@ -130,12 +130,14 @@ def generate_dataset_jsonl(
     show_progress: bool = True,
     progress_desc: Optional[str] = None,
     sample_timeout: Optional[float] = None,
+    include_rule_table: bool = True,
 ):
     """Generate a JSONL dataset and companion metadata file."""
     rng = random.Random(seed)
     shared_seen = seen_fingerprints if seen_fingerprints is not None else set()
     produced = 0
     attempts = 0
+    attempt_budget_skips = 0
     accepted_fps: List[str] = []
     accepted_probe_fps: List[str] = []
     lambda_sum = 0.0
@@ -215,9 +217,16 @@ def generate_dataset_jsonl(
             while produced < count:
                 attempts += 1
                 if attempts > count * max_attempts_per_item:
-                    raise RuntimeError(
-                        "Attempt budget exceeded; relax caps or balancing."
+                    attempt_budget_skips += 1
+                    msg = (
+                        "Attempt budget exceeded; stopping early. "
+                        "Relax caps or balancing to produce more items."
                     )
+                    if progress is not None:
+                        progress.write(msg)
+                    else:
+                        print(msg)
+                    break
 
                 coverage_fraction_val = sample_coverage_fraction()
 
@@ -240,6 +249,7 @@ def generate_dataset_jsonl(
                         dataset_version=dataset_version,
                         construction=construction,
                         unroll_tau_max=unroll_tau_max,
+                        include_rule_table=include_rule_table,
                     )
 
                 timeout_for_call = sample_timeout if timeout_armed else None
@@ -353,6 +363,7 @@ def generate_dataset_jsonl(
         "probe_fingerprints": accepted_probe_fps,
         "stats": {
             "timeouts": timeout_count,
+            "attempt_budget_skips": attempt_budget_skips,
             "count": produced,
             "lambda": {
                 "sum": lambda_sum,

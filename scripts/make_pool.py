@@ -14,19 +14,18 @@ from tqdm import tqdm
 from cellarc.generation.dataset import generate_dataset_jsonl
 
 # Mixture for coverage fractions: lots of low-ρ (hard), some mid, some full
-def cov_sampler(rng: random.Random) -> float:
+def cov_sampler(rng):
     u = rng.random()
-    if u < 0.35:   # spiky hard regime
-        return max(0.02, rng.betavariate(0.6, 7.0))     # ~2–20%
-    if u < 0.75:   # mid regime
-        return rng.betavariate(1.6, 2.0) * 0.7 + 0.15   # ~15–85%
-    return rng.uniform(0.9, 1.0)                        # near-full
+    if u < 0.50:   return rng.uniform(0.05, 0.25)  # low
+    if u < 0.85:   return rng.uniform(0.25, 0.60)  # mid
+    return rng.uniform(0.80, 0.90)                 # small high tail
 
 # Nearly uniform family mix (we’ll also do single-family shards to guarantee coverage)
 UNIFORM_FAMILIES: Dict[str, float] = {
     "random": 1, "totalistic": 1, "outer_totalistic": 1, "outer_inner_totalistic": 1,
-    "threshold": 1, "linear_mod_k": 1, "cyclic_excitable": 1, "permuted_totalistic": 1,
-}
+    "threshold": 1, "linear_mod_k": 1
+} 
+# avoiding "cyclic_excitable": 1, "permuted_totalistic": 1 for redundancy 
 
 def single_family(name: str) -> Dict[str, float]:
     return {name: 1.0}
@@ -45,10 +44,10 @@ def main():
     ap.add_argument("--k-min", type=int, default=2)
     ap.add_argument("--k-max", type=int, default=6)
     ap.add_argument("--max-radius", type=int, default=3)
-    ap.add_argument("--max-steps", type=int, default=5)
-    ap.add_argument("--train-examples", type=int, default=4)
+    ap.add_argument("--max-steps", type=int, default=4)
+    ap.add_argument("--train-examples", type=int, default=5)
     ap.add_argument("--avg-train-len", type=int, default=48)
-    ap.add_argument("--balance-by", choices=["lambda","entropy","all"], default="lambda")
+    ap.add_argument("--balance-by", choices=["lambda","entropy","all"], default="all")
     ap.add_argument("--unique-by", choices=["tstep","rule"], default="tstep")
     ap.add_argument("--constructions", nargs="+",
                     default=["cycle","unrolled","hybrid"])
@@ -58,6 +57,11 @@ def main():
                     help="Maximum seconds allowed per sampled episode (default: no limit)")
     ap.add_argument("--max-attempts-per-item", type=int, default=200,
                     help="Attempt budget multiplier per episode before aborting")
+    ap.add_argument(
+        "--include-rule-table",
+        action="store_true",
+        help="Serialize rule tables alongside each episode (default: skip for smaller shards)",
+    )
     ap.add_argument("--no-complexity", action="store_true",
                     help="Skip average lambda/entropy computations for faster sampling")
     ap.add_argument("--no-morphology", action="store_true",
@@ -99,13 +103,14 @@ def main():
             annotate_morphology=not args.no_morphology,
             query_within_coverage=False,
             construction=construction,
-            unroll_tau_max=32,
+            unroll_tau_max=16,
             seen_fingerprints=seen,
             dataset_version="pool_v1",
             show_progress=True,
             progress_desc=base,
             max_attempts_per_item=args.max_attempts_per_item,
             sample_timeout=args.sample_timeout,
+            include_rule_table=args.include_rule_table,
         )
         print(f"[make_pool] {base}: wrote {stats['written']} episodes")
 

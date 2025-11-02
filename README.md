@@ -12,17 +12,34 @@ export CELLARC_FORCE_CPU=0
 
 python scripts/make_pool.py \
   --outdir artifacts/pool \
-  --per-shard 10000 \
+  --per-shard 100 \
   --shards 6 \
   --family-bonus 8 \
-  --k-min 2 --k-max 10 \
-  --max-radius 3 --max-steps 5 \
-  --train-examples 5 --avg-train-len 48 \
-  --balance-by lambda \
-  --unique-by tstep \
+  --train-examples 5 \
+  --avg-train-len 64 \
   --constructions cycle unrolled hybrid \
   --coverage-modes chunked uniform \
   --sample-timeout 0.1 \
+  --max-attempts-per-item 20 \
+  --no-complexity \
+  --no-morphology
+```
+
+```
+# optional: faster on GPU if JAX/CUDA is installed
+export CELLARC_FORCE_CPU=0
+
+python scripts/make_pool.py \
+  --outdir artifacts/pool \
+  --per-shard 10000 \
+  --shards 6 \
+  --family-bonus 8 \
+  --train-examples 5 \
+  --avg-train-len 64 \
+  --constructions cycle unrolled hybrid \
+  --coverage-modes chunked uniform \
+  --sample-timeout 0.1 \
+  --max-attempts-per-item 20 \
   --no-complexity \
   --no-morphology
 ```

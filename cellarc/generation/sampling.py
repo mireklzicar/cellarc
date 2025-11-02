@@ -56,6 +56,7 @@ def sample_task(
     unroll_tau_max: int = 24,
     schema_version: str = SCHEMA_VERSION,
     dataset_version: Optional[str] = None,
+    include_rule_table: bool = True,
 ):
     """Generate a single training episode with metadata and fingerprints."""
     episode_seed = rng.randrange(1 << 62)
@@ -345,9 +346,12 @@ def sample_task(
 
     probe_fp = rule_fingerprint(table, k, r)
 
-    rule_table_payload = serialize_rule_table(
-        table, alphabet_size=k, radius=r, quiescent_state=qstate
-    )
+    if include_rule_table:
+        rule_table_payload = serialize_rule_table(
+            table, alphabet_size=k, radius=r, quiescent_state=qstate
+        )
+    else:
+        rule_table_payload = None
 
     record = {
         "train": [{"input": x, "output": y} for x, y in train_pairs],
@@ -394,8 +398,9 @@ def sample_task(
             "morphology": morphology,
             "query_time": int(query_time),
         },
-        "rule_table": rule_table_payload,
     }
+    if include_rule_table:
+        record["rule_table"] = rule_table_payload
     return record
 
 
