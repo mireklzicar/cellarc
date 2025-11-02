@@ -57,9 +57,11 @@ def sample_task(
     schema_version: str = SCHEMA_VERSION,
     dataset_version: Optional[str] = None,
     include_rule_table: bool = True,
+    episode_seed: Optional[int] = None,
 ):
     """Generate a single training episode with metadata and fingerprints."""
-    episode_seed = rng.randrange(1 << 62)
+    if episode_seed is None:
+        episode_seed = rng.randrange(1 << 62)
     episode_rng = random.Random(episode_seed)
 
     k_lo, k_hi = k_range

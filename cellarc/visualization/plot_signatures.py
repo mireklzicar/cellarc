@@ -103,8 +103,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument(
         "--random-state",
         type=int,
-        default=42,
-        help="Random seed for embeddings (default: 42).",
+        default=12345,
+        help="Random seed for embeddings (default: 12345).",
     )
     parser.add_argument(
         "--summary-json",

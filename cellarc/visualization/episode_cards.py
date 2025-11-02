@@ -2,21 +2,30 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 
+from eval.common import EpisodeRecord
 from cellarc.generation.cax_runner import AutomatonRunner
 from cellarc.generation.serialization import deserialize_rule_table
 from cellarc.utils import de_bruijn_cycle
+from cellarc.visualization.ca_rollout_viz import _ensure_rule_table
 
 from cellarc.visualization.palette import BG_COLOR, PALETTE
 
 
 def runner_from_record(rec: Dict[str, Any], *, rng_seed: int = 0) -> AutomatonRunner:
     """Instantiate an AutomatonRunner for the serialized rule table."""
-    payload = rec["rule_table"]
+    if "rule_table" not in rec or not isinstance(rec.get("rule_table"), dict):
+        entry = EpisodeRecord(record=rec, source=Path("<episode_cards>"))
+        payload = _ensure_rule_table(entry)
+    else:
+        payload = rec["rule_table"]
+    if not isinstance(payload, dict):
+        raise ValueError("Episode record is missing a valid rule_table payload.")
     table = deserialize_rule_table(payload)
     alphabet_size = int(payload["alphabet_size"])
     radius = int(payload["radius"])

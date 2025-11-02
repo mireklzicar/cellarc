@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:  # pragma: no cover
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from eval.common import prepare_episode, load_records, EpisodeRecord
+from cellarc.visualization.ca_rollout_viz import _ensure_rule_table
 from cellarc.visualization.palette import BG_COLOR, CMAP_HEX, PALETTE
 
 
@@ -51,10 +52,10 @@ def find_episode(args: argparse.Namespace) -> EpisodeRecord:
     for idx, entry in enumerate(load_records(args.inputs)):
         if args.index is not None and idx != args.index:
             continue
-        if args.fingerprint:
-            meta = entry.record.get("meta", {}) or {}
-            if str(meta.get("fingerprint")) != args.fingerprint:
-                continue
+        meta = entry.record.get("meta", {}) or {}
+        if args.fingerprint and str(meta.get("fingerprint")) != args.fingerprint:
+            continue
+        _ensure_rule_table(entry)
         if args.index is None and args.fingerprint is None:
             return entry
         if args.index == idx or (args.fingerprint and str(meta.get("fingerprint")) == args.fingerprint):
