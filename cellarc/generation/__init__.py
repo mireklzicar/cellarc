@@ -13,6 +13,7 @@ from .metrics import (
     shannon_entropy,
 )
 from .morphology import quick_morphology_features
+from .rule_table import DenseRuleTable
 from .rules import (
     rule_table_cyclic_excitable,
     rule_table_linear_mod_k,
@@ -40,6 +41,7 @@ __all__ = [
     "shannon_entropy",
     "joint_shannon_entropy",
     "mutual_information",
+    "DenseRuleTable",
     "apply_rule_from_table",
     "induced_tstep_fingerprint",
     "rule_fingerprint",

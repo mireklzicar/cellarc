@@ -6,7 +6,7 @@ import contextlib
 import os
 import warnings
 from dataclasses import dataclass
-from typing import Iterator, Sequence, Tuple
+from typing import Iterator, Mapping, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -18,7 +18,7 @@ from cax.core import ComplexSystem, Input, State
 from cax.core.perceive import ConvPerceive
 from cax.core.update import Update
 
-from .helpers import enumerate_neighborhoods
+from .rule_table import DenseRuleTable, ensure_dense_rule_table
 
 def _env_flag(name: str, *, default: bool) -> bool:
     """Parse an environment boolean flag with a sensible default."""
@@ -65,16 +65,14 @@ def _to_column_state(state: Sequence[int] | np.ndarray | jnp.ndarray) -> jnp.nda
 
 
 def _transition_arrays(
-    table: dict[Tuple[int, ...], int],
+    table: DenseRuleTable,
     *,
     alphabet_size: int,
     radius: int,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Return transition lookup and base powers for the provided rule table."""
     arity = 2 * radius + 1
-    transitions = np.zeros(alphabet_size ** arity, dtype=np.int32)
-    for idx, neighborhood in enumerate(enumerate_neighborhoods(alphabet_size, radius)):
-        transitions[idx] = table[neighborhood]
+    transitions = np.asarray(table.values_view(), dtype=np.int32)
     base_pows = np.asarray(
         [alphabet_size ** (arity - 1 - i) for i in range(arity)], dtype=np.int32
     )
@@ -158,13 +156,20 @@ class AutomatonRunner:
 
     alphabet_size: int
     radius: int
-    table: dict[Tuple[int, ...], int]
+    table: Union[DenseRuleTable, Mapping[Tuple[int, ...], int]]
     rng_seed: int = 0
 
     def __post_init__(self) -> None:
+        dense_table = ensure_dense_rule_table(
+            self.table,
+            alphabet_size=self.alphabet_size,
+            radius=self.radius,
+        )
+        self.table = dense_table
+
         def _construct() -> tuple[nnx.Rngs, RuleTableAutomaton]:
             transitions, base_pows = _transition_arrays(
-                self.table,
+                dense_table,
                 alphabet_size=self.alphabet_size,
                 radius=self.radius,
             )
@@ -233,7 +238,7 @@ class AutomatonRunner:
 
 
 def evolve_rule_table(
-    table: dict[Tuple[int, ...], int],
+    table: Union[DenseRuleTable, Mapping[Tuple[int, ...], int]],
     init_state: Sequence[int] | np.ndarray | jnp.ndarray,
     *,
     timesteps: int,
