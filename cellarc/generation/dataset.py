@@ -5,8 +5,12 @@ from __future__ import annotations
 import json
 import math
 import random
+import signal
+import threading
+from contextlib import contextmanager
 from collections import Counter
 from pathlib import Path
+from time import perf_counter
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple, Union
 
 try:  # pragma: no cover - optional dependency
@@ -16,6 +20,80 @@ except ImportError:  # pragma: no cover - fallback when tqdm is absent
 
 from .constants import SCHEMA_VERSION
 from .sampling import sample_task
+
+
+def _signal_timeouts_supported() -> bool:
+    """Check if we can rely on SIGALRM for pre-emptive timeouts."""
+    return hasattr(signal, "setitimer") and threading.current_thread() is threading.main_thread()
+
+
+@contextmanager
+def _time_limit(seconds: float) -> None:
+    """
+    Enforce a wall-clock timeout using SIGALRM when available.
+
+    Falls back silently when signals are unsupported (e.g. non-main thread).
+    """
+    if seconds <= 0:
+        yield
+        return
+    if not _signal_timeouts_supported():
+        yield
+        return
+
+    def _raise_timeout(signum: int, frame) -> None:  # pragma: no cover - depends on signal delivery
+        raise TimeoutError(f"Operation exceeded {seconds} seconds")
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    # setitimer provides sub-second resolution; zero the timer on exit
+    signal.signal(signal.SIGALRM, _raise_timeout)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, previous_handler)
+
+
+def _call_with_timeout(func: Callable[[], Dict[str, object]], timeout: Optional[float]) -> Dict[str, object]:
+    """
+    Execute callable enforcing timeout where possible.
+
+    Uses SIGALRM for pre-emption; otherwise measures elapsed time and raises
+    post-hoc so the caller can discard the result.
+    """
+    if timeout is None:
+        return func()
+
+    if _signal_timeouts_supported():
+        with _time_limit(timeout):
+            return func()
+
+    start = perf_counter()
+    result = func()
+    if perf_counter() - start > timeout:
+        raise TimeoutError(f"Operation exceeded {timeout} seconds")
+    return result
+
+
+def _warmup_timeout_sensitive_backends() -> None:
+    """
+    Prime backends that perform global initialisation (e.g. JAX GPU plugins).
+
+    Doing this before activating SIGALRM-based timeouts prevents the timer from
+    interrupting one-off startup and forcing a CPU fallback.
+    """
+    try:
+        import jax  # type: ignore
+    except ImportError:
+        return
+
+    try:  # pragma: no cover - backend-dependent code path
+        jax.devices()
+    except Exception:
+        # Device discovery failures will surface naturally later; we only care
+        # about avoiding spurious interrupts here.
+        return
 
 
 def generate_dataset_jsonl(
@@ -51,6 +129,7 @@ def generate_dataset_jsonl(
     dataset_version: str = "dev",
     show_progress: bool = True,
     progress_desc: Optional[str] = None,
+    sample_timeout: Optional[float] = None,
 ):
     """Generate a JSONL dataset and companion metadata file."""
     rng = random.Random(seed)
@@ -80,6 +159,7 @@ def generate_dataset_jsonl(
     query_length_max = float("-inf")
     query_length_count = 0
     query_length_hist: Counter[int] = Counter()
+    timeout_count = 0
 
     progress = None
     if show_progress and tqdm is not None and count > 0:
@@ -123,7 +203,12 @@ def generate_dataset_jsonl(
             raise ValueError("coverage_fraction values must lie in (0, 1].")
         return val
 
+    timeout_armed = sample_timeout is None
+
     try:
+        if sample_timeout is not None:
+            _warmup_timeout_sensitive_backends()
+
         with path.open("w", encoding="utf-8") as f_core, meta_path.open(
             "w", encoding="utf-8"
         ) as f_meta:
@@ -134,25 +219,38 @@ def generate_dataset_jsonl(
                         "Attempt budget exceeded; relax caps or balancing."
                     )
 
-                rec = sample_task(
-                    rng,
-                    k_range=k_range,
-                    max_radius=max_radius,
-                    max_steps=max_steps,
-                    train_examples=train_examples,
-                    target_avg_train_len=target_avg_train_len,
-                    family_mix=family_mix,
-                    unique_by=unique_by,
-                    coverage_fraction=sample_coverage_fraction(),
-                    coverage_mode=coverage_mode,
-                    compute_complexity=compute_complexity,
-                    annotate_morphology=annotate_morphology,
-                    query_within_coverage=query_within_coverage,
-                    schema_version=schema_version,
-                    dataset_version=dataset_version,
-                    construction=construction,
-                    unroll_tau_max=unroll_tau_max,
-                )
+                coverage_fraction_val = sample_coverage_fraction()
+
+                def _sample() -> Dict[str, object]:
+                    return sample_task(
+                        rng,
+                        k_range=k_range,
+                        max_radius=max_radius,
+                        max_steps=max_steps,
+                        train_examples=train_examples,
+                        target_avg_train_len=target_avg_train_len,
+                        family_mix=family_mix,
+                        unique_by=unique_by,
+                        coverage_fraction=coverage_fraction_val,
+                        coverage_mode=coverage_mode,
+                        compute_complexity=compute_complexity,
+                        annotate_morphology=annotate_morphology,
+                        query_within_coverage=query_within_coverage,
+                        schema_version=schema_version,
+                        dataset_version=dataset_version,
+                        construction=construction,
+                        unroll_tau_max=unroll_tau_max,
+                    )
+
+                timeout_for_call = sample_timeout if timeout_armed else None
+
+                try:
+                    rec = _call_with_timeout(_sample, timeout_for_call)
+                except TimeoutError:
+                    timeout_count += 1
+                    timeout_armed = True
+                    continue
+                timeout_armed = True
 
                 if cap_lambda is not None and rec["meta"]["lambda"] > cap_lambda:
                     continue
@@ -254,6 +352,7 @@ def generate_dataset_jsonl(
         "fingerprints": accepted_fps,
         "probe_fingerprints": accepted_probe_fps,
         "stats": {
+            "timeouts": timeout_count,
             "count": produced,
             "lambda": {
                 "sum": lambda_sum,

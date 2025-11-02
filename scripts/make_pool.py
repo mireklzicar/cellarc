@@ -54,6 +54,14 @@ def main():
                     default=["cycle","unrolled","hybrid"])
     ap.add_argument("--coverage-modes", nargs="+",
                     default=["chunked","uniform"])
+    ap.add_argument("--sample-timeout", type=float, default=None,
+                    help="Maximum seconds allowed per sampled episode (default: no limit)")
+    ap.add_argument("--max-attempts-per-item", type=int, default=200,
+                    help="Attempt budget multiplier per episode before aborting")
+    ap.add_argument("--no-complexity", action="store_true",
+                    help="Skip average lambda/entropy computations for faster sampling")
+    ap.add_argument("--no-morphology", action="store_true",
+                    help="Skip morphology annotations for faster sampling")
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
@@ -87,8 +95,8 @@ def main():
             coverage_mode=coverage_mode,
             cap_lambda=None,
             cap_entropy=None,
-            compute_complexity=True,
-            annotate_morphology=True,
+            compute_complexity=not args.no_complexity,
+            annotate_morphology=not args.no_morphology,
             query_within_coverage=False,
             construction=construction,
             unroll_tau_max=32,
@@ -96,6 +104,8 @@ def main():
             dataset_version="pool_v1",
             show_progress=True,
             progress_desc=base,
+            max_attempts_per_item=args.max_attempts_per_item,
+            sample_timeout=args.sample_timeout,
         )
         print(f"[make_pool] {base}: wrote {stats['written']} episodes")
 

@@ -1,6 +1,7 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["setuptools>=67", "wheel", "packaging>=24.2"]
+build-backend = "build_backend"
+backend-path = ["."]
 
 [project]
 name = "cellarc"
