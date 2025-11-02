@@ -1,7 +1,6 @@
 [build-system]
-requires = ["setuptools>=67", "wheel", "packaging>=24.2"]
-build-backend = "build_backend"
-backend-path = ["."]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
 
 [project]
 name = "cellarc"
@@ -25,7 +24,5 @@ dev = [
     "flake8",
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["cellarc*"]
-exclude = ["tests*", "scripts*"]
+[tool.hatch.build.targets.wheel]
+packages = ["cellarc"]
