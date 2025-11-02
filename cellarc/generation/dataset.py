@@ -44,6 +44,8 @@ def generate_dataset_jsonl(
     compute_complexity: bool = True,
     annotate_morphology: bool = True,
     query_within_coverage: bool = False,
+    construction: str = "cycle",
+    unroll_tau_max: int = 24,
     seen_fingerprints: Optional[Set[str]] = None,
     schema_version: str = SCHEMA_VERSION,
     dataset_version: str = "dev",
@@ -148,6 +150,8 @@ def generate_dataset_jsonl(
                     query_within_coverage=query_within_coverage,
                     schema_version=schema_version,
                     dataset_version=dataset_version,
+                    construction=construction,
+                    unroll_tau_max=unroll_tau_max,
                 )
 
                 if cap_lambda is not None and rec["meta"]["lambda"] > cap_lambda:

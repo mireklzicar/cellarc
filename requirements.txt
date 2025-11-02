@@ -1,0 +1,7 @@
+# Core dependencies
+numpy
+matplotlib
+jax
+flax
+cax
+tqdm
