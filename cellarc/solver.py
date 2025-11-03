@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 Symbol = int
 Word = List[Symbol]
@@ -30,6 +31,8 @@ class LearnedLocalMap:
     mapping: Dict[Window, Symbol]
     alphabet_size: Optional[int] = None
     windows_total: Optional[int] = None
+    alphabet: Optional[Sequence[Symbol]] = None
+    rng_seed: Optional[int] = None
 
     @property
     def coverage_complete(self) -> bool:
@@ -37,17 +40,94 @@ class LearnedLocalMap:
             return False
         return len(self.mapping) == self.windows_total == (self.alphabet_size ** self.W)
 
-    def predict(self, query: Word) -> Word:
+    def _alphabet(self) -> List[Symbol]:
+        if self.alphabet is not None:
+            return list(self.alphabet)
+        if self.alphabet_size is not None:
+            return list(range(self.alphabet_size))
+        observed = sorted(set(self.mapping.values()))
+        if observed:
+            return observed
+        return [0]
+
+    def _majority_symbol(self) -> Symbol:
+        if not self.mapping:
+            return 0
+        from collections import Counter
+
+        return Counter(self.mapping.values()).most_common(1)[0][0]
+
+    def predict(
+        self,
+        query: Word,
+        *,
+        rng: Optional[random.Random] = None,
+        fallback: str = "random",
+        default: int = 0,
+    ) -> Word:
+        """
+        Predict the automaton response for ``query``.
+
+        Parameters
+        ----------
+        query:
+            Input symbols to evaluate.
+        rng:
+            Optional random generator used when ``fallback='random'``.
+        fallback:
+            Strategy for unseen windows. Supported values:
+              - ``'random'``: sample uniformly from the alphabet (default).
+              - ``'majority'``: reuse the most frequent observed output.
+              - ``'default'``: emit the provided ``default`` symbol.
+              - ``'strict'``: raise ``KeyError`` as soon as a window is missing.
+        default:
+            Symbol to emit when ``fallback='default'``.
+        """
+        if fallback not in {"random", "majority", "default", "strict"}:
+            raise ValueError("fallback must be one of {'random','majority','default','strict'}")
+
+        rng_local = rng
+        if fallback == "random":
+            if rng_local is None:
+                seed = self.rng_seed if self.rng_seed is not None else 0
+                rng_local = random.Random(seed)
+            alphabet = self._alphabet()
+            random_cache: Dict[Window, Symbol] = {}
+        else:
+            alphabet = []
+            random_cache = {}
+
+        if fallback == "majority":
+            mode_symbol = self._majority_symbol()
+        elif fallback == "default":
+            mode_symbol = default
+        else:
+            mode_symbol = 0
+
+        missing: List[Window] = []
         n = len(query)
         out: List[Symbol] = [0] * n
-        missing: List[Window] = []
         for i in range(n):
             win = _centered_window(query, i, self.W, self.wrap)
-            try:
-                out[i] = self.mapping[win]
-            except KeyError:
+            val = self.mapping.get(win)
+            if val is not None:
+                out[i] = val
+                continue
+
+            if fallback == "random":
+                cached = random_cache.get(win)
+                if cached is None:
+                    cached = rng_local.choice(alphabet)  # type: ignore[arg-type]
+                    random_cache[win] = cached
+                out[i] = cached
+            elif fallback == "majority":
+                out[i] = mode_symbol
+            elif fallback == "default":
+                out[i] = mode_symbol
+            else:
                 missing.append(win)
-        if missing:
+
+        if missing and fallback == "strict":
             ex = missing[0]
             raise KeyError(
                 f"Missing {len(missing)} of {self.alphabet_size ** self.W if self.alphabet_size else '??'} "
@@ -60,23 +140,16 @@ class LearnedLocalMap:
         Predict while handling unseen windows via a simple backoff policy:
           - 'majority': emit the most frequent symbol observed in training.
           - 'default':  always emit the supplied default symbol.
+          - 'random':   guess uniformly from the alphabet using the stored RNG seed.
         """
-        if policy not in {"majority", "default"}:
-            raise ValueError("policy must be 'majority' or 'default'")
+        if policy not in {"majority", "default", "random"}:
+            raise ValueError("policy must be 'majority', 'default', or 'random'")
 
-        if policy == "majority" and self.mapping:
-            from collections import Counter
-
-            mode_symbol = Counter(self.mapping.values()).most_common(1)[0][0]
-        else:
-            mode_symbol = default
-
-        n = len(query)
-        out: List[Symbol] = [mode_symbol] * n
-        for i in range(n):
-            win = _centered_window(query, i, self.W, self.wrap)
-            out[i] = self.mapping.get(win, mode_symbol)
-        return out
+        if policy == "majority":
+            return self.predict(query, fallback="majority")
+        if policy == "default":
+            return self.predict(query, fallback="default", default=default)
+        return self.predict(query, fallback="random")
 
 
 def learn_local_map_from_pairs(
@@ -110,6 +183,7 @@ def learn_local_map_from_pairs(
         mapping=table,
         alphabet_size=alphabet_size,
         windows_total=windows_total,
+        alphabet=None,
     )
 
 
@@ -135,10 +209,27 @@ def learn_from_record(rec: dict) -> LearnedLocalMap:
     wrap = _infer_wrap_from_record(rec)
 
     train_pairs = [(pair["input"], pair["output"]) for pair in rec["train"]]
-    return learn_local_map_from_pairs(
+    alphabet: Optional[Sequence[Symbol]]
+    if k is not None:
+        alphabet = tuple(range(k))
+    else:
+        observed: List[Symbol] = []
+        for x, y in train_pairs:
+            observed.extend(x)
+            observed.extend(y)
+        alphabet = tuple(sorted(set(observed))) if observed else None
+
+    try:
+        episode_seed = int(meta.get("episode_seed")) if "episode_seed" in meta else None
+    except Exception:
+        episode_seed = None
+    model = learn_local_map_from_pairs(
         train_pairs=train_pairs,
         W=W,
         wrap=wrap,
         alphabet_size=k,
         windows_total=windows_total,
     )
+    model.alphabet = alphabet
+    model.rng_seed = episode_seed
+    return model
