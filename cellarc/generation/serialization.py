@@ -23,7 +23,7 @@ def serialize_rule_table(
     raw = values.tobytes()
     encoded = base64.b64encode(raw).decode("ascii")
     return {
-        "format_version": "1.0.1",
+        "format_version": "1.0.2",
         "alphabet_size": int(alphabet_size),
         "radius": int(radius),
         "arity": int(arity),

@@ -11,13 +11,18 @@ requires-python = ">=3.8"
 dependencies = [
     "numpy",
     "matplotlib",
-    "jax",
-    "flax",
-    "cax",
     "tqdm",
 ]
 
 [project.optional-dependencies]
+all = [
+    "cax",
+    "datasets>=2.14",
+    "flax",
+    "huggingface_hub>=0.18",
+    "jax",
+    "pyarrow",
+]
 dev = [
     "pytest",
     "black",

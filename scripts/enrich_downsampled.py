@@ -94,7 +94,7 @@ def enrich_downsampled(
             )
 
             meta_full.update({
-                "schema_version": "1.0.1",
+                "schema_version": "1.0.2",
                 "avg_cell_entropy": avg_entropy,
                 "entropy_bin": entropy_bin(avg_entropy),
                 "avg_mutual_information_d1": ami_1,

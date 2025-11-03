@@ -22,37 +22,75 @@ except ImportError:  # pragma: no cover - fallback when hub is not installed
 
 Episode = Dict[str, object]
 
+_PACKAGE_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _PACKAGE_DIR.parent
+
+_CELLARC_SPLIT_FILES: Dict[str, Dict[str, List[str]]] = {
+    "train": {
+        "jsonl": ["data/train.jsonl"],
+        "parquet": ["data/train.parquet"],
+    },
+    "val": {
+        "jsonl": ["data/val.jsonl"],
+        "parquet": ["data/val.parquet"],
+    },
+    "test_interpolation": {
+        "jsonl": ["data/test_interpolation.jsonl"],
+        "parquet": ["data/test_interpolation.parquet"],
+    },
+    "test_extrapolation": {
+        "jsonl": ["data/test_extrapolation.jsonl"],
+        "parquet": ["data/test_extrapolation.parquet"],
+    },
+}
+
 _REMOTE_BENCHMARKS: Dict[str, Dict[str, object]] = {
     "cellarc_100k": {
         "repo_id": "mireklzicar/cellarc_100k",
         "meta_repo_id": "mireklzicar/cellarc_100k_meta",
-        "local_dir": "cellarc_100k",
-        "meta_dir": "cellarc_100k_meta",
-        "splits": {
-            "train": "data/train/train_manifest.json",
-            "val": "data/val/rho20/val_rho20_manifest.json",
-            "validation": "data/val/rho20/val_rho20_manifest.json",
-            "val_rho5": "data/val/rho5/val_rho5_manifest.json",
-            "val_rho10": "data/val/rho10/val_rho10_manifest.json",
-            "val_rho20": "data/val/rho20/val_rho20_manifest.json",
-            "val_rho40": "data/val/rho40/val_rho40_manifest.json",
-            "val_rho80": "data/val/rho80/val_rho80_manifest.json",
-            "test": "data/test/rho20/test_rho20_manifest.json",
-            "test_rho5": "data/test/rho5/test_rho5_manifest.json",
-            "test_rho10": "data/test/rho10/test_rho10_manifest.json",
-            "test_rho20": "data/test/rho20/test_rho20_manifest.json",
-            "test_rho40": "data/test/rho40/test_rho40_manifest.json",
-            "test_rho80": "data/test/rho80/test_rho80_manifest.json",
+        "local_dir": "hf-cellarc_100k",
+        "meta_dir": "hf-cellarc_100k_meta",
+        "split_files": _CELLARC_SPLIT_FILES,
+        "split_aliases": {
+            "validation": "val",
+            "test": "test_interpolation",
+            "test_interp": "test_interpolation",
+            "test_extrap": "test_extrapolation",
         },
+        "fallbacks": (
+            "artifacts/hf_cellarc/hf-cellarc_100k",
+            "artifacts/datasets/cellarc_100k",
+        ),
+        "meta_fallbacks": (
+            "artifacts/hf_cellarc/hf-cellarc_100k_meta",
+            "artifacts/datasets/cellarc_100k_meta",
+        ),
     },
 }
 
 
 def _default_cache_dir() -> Path:
-    override = os.getenv("CELL_ARC_HOME")
+    override = os.getenv("CELLARC_HOME")
     if override:
         return Path(override).expanduser()
     return Path.home() / ".cache" / "cell_arc"
+
+
+def _resolve_split_spec(name: str, split: str) -> Dict[str, List[str]]:
+    config = _REMOTE_BENCHMARKS.get(name)
+    if not config:
+        raise KeyError(f"Unknown remote benchmark: {name}")
+    split_aliases: Dict[str, str] = config.get("split_aliases", {})  # type: ignore[assignment]
+    split_files: Dict[str, Dict[str, List[str]]] = config.get("split_files", {})  # type: ignore[assignment]
+    key = _normalize_split_name(split)
+    canonical = split_aliases.get(key, key)
+    spec = split_files.get(canonical)
+    if not spec:
+        available = ", ".join(sorted(split_files.keys())) or "<none>"
+        raise KeyError(
+            f"Split '{split}' is not defined for benchmark '{name}'. Available: {available}"
+        )
+    return spec
 
 
 def available_remote_datasets() -> List[str]:
@@ -67,7 +105,8 @@ def available_remote_splits(name: str = "cellarc_100k") -> List[str]:
     config = _REMOTE_BENCHMARKS.get(name)
     if not config:
         raise KeyError(f"Unknown remote benchmark: {name}")
-    return sorted(config.get("splits", {}).keys())
+    split_files: Dict[str, Dict[str, List[str]]] = config.get("split_files", {})  # type: ignore[assignment]
+    return sorted(split_files.keys())
 
 
 def _require_snapshot_download() -> None:
@@ -81,20 +120,6 @@ def _require_snapshot_download() -> None:
 def _normalize_split_name(split: str) -> str:
     normalized = "_".join(part for part in split.lower().replace("/", "_").split())
     return normalized.replace("-", "_")
-
-
-def _resolve_manifest_path(name: str, split: str) -> Path:
-    config = _REMOTE_BENCHMARKS.get(name)
-    if not config:
-        raise KeyError(f"Unknown remote benchmark: {name}")
-    key = _normalize_split_name(split)
-    manifest_rel = config.get("splits", {}).get(key)
-    if not manifest_rel:
-        raise KeyError(
-            f"Split '{split}' is not defined for benchmark '{name}'. "
-            "Call available_remote_splits() for supported options."
-        )
-    return Path(manifest_rel)
 
 
 def _resolve_artifact_path(base_dir: Path, entry: Union[str, Path]) -> Path:
@@ -127,10 +152,12 @@ def download_benchmark(
     name:
         Registered benchmark name. Currently supports ``cellarc_100k``.
     include_metadata:
-        If ``True`` download the companion repository with per-episode metadata.
+        If ``True`` download the companion repository with per-episode metadata
+        (the ``cellarc_100k_meta`` dataset). When ``False`` the lighter
+        supervision-only dataset is retrieved instead.
     root:
         Directory where the snapshot should be materialised. Defaults to
-        ``CELL_ARC_HOME`` or ``~/.cache/cell_arc``.
+        ``CELLARC_HOME`` or ``~/.cache/cell_arc``.
     force_download:
         If ``True`` redownload all files even if they are present locally.
     revision / meta_revision:
@@ -140,6 +167,10 @@ def download_benchmark(
         Optional Hugging Face token for private artifacts.
     allow_patterns / ignore_patterns:
         Optional filename patterns forwarded to ``snapshot_download``.
+    
+    Existing local checkouts in ``root`` or the configured fallbacks (for
+    example, the repository's ``artifacts/hf_cellarc`` mirrors) short-circuit the
+    download step unless ``force_download`` is set.
 
     Returns
     -------
@@ -147,7 +178,6 @@ def download_benchmark(
         Location of the downloaded snapshot.
     """
 
-    _require_snapshot_download()
     config = _REMOTE_BENCHMARKS.get(name)
     if not config:
         raise KeyError(f"Unknown remote benchmark: {name}")
@@ -155,9 +185,24 @@ def download_benchmark(
     use_meta = include_metadata and config.get("meta_repo_id")
     repo_id = config["meta_repo_id" if use_meta else "repo_id"]
     local_dir_name = config["meta_dir" if use_meta else "local_dir"]
+    fallback_key = "meta_fallbacks" if use_meta else "fallbacks"
+    fallback_dirs: Sequence[str] = config.get(fallback_key, ())  # type: ignore[assignment]
 
     base_root = Path(root).expanduser() if root else _default_cache_dir()
     target_dir = base_root / local_dir_name
+
+    if not force_download:
+        if target_dir.exists():
+            return target_dir
+        for candidate in fallback_dirs:
+            candidate_path = Path(candidate)
+            if not candidate_path.is_absolute():
+                candidate_path = (_PROJECT_ROOT / candidate_path).resolve()
+            if candidate_path.exists():
+                return candidate_path
+
+    _require_snapshot_download()
+
     target_dir.parent.mkdir(parents=True, exist_ok=True)
 
     resolved_revision = meta_revision if use_meta and meta_revision else revision
@@ -373,7 +418,13 @@ class EpisodeDataset:
         ignore_patterns: Optional[Sequence[str]] = None,
         **kwargs: Any,
     ) -> "EpisodeDataset":
-        """Instantiate a dataset after downloading a snapshot from the Hub."""
+        """Instantiate a dataset after downloading a snapshot from the Hub.
+
+        The helper understands the new ``cellarc_100k`` layout where each split is
+        stored as ``data/<split>.{jsonl,parquet}``. Metadata-enriched variants are
+        served by pointing ``include_metadata`` at the ``cellarc_100k_meta``
+        repository.
+        """
 
         repository_path = download_benchmark(
             name=name,
@@ -387,14 +438,36 @@ class EpisodeDataset:
             ignore_patterns=ignore_patterns,
         )
 
-        manifest_rel = _resolve_manifest_path(name, split)
-        manifest_path = repository_path / manifest_rel
-        if not manifest_path.exists():
-            raise FileNotFoundError(
-                f"Manifest '{manifest_rel}' not found in snapshot '{repository_path}'."
+        split_spec = _resolve_split_spec(name, split)
+
+        fmt_override = kwargs.pop("fmt", None)
+        prefer_order = kwargs.pop("prefer", None)
+        if fmt_override is not None:
+            search_order: Sequence[str] = (fmt_override,)
+        else:
+            if prefer_order is None:
+                prefer_order = ("jsonl", "parquet")
+            search_order = tuple(prefer_order)
+
+        resolved_paths: List[Path] = []
+        chosen_fmt: Optional[str] = None
+        for candidate in search_order:
+            entries = split_spec.get(candidate)
+            if not entries:
+                continue
+            chosen_fmt = candidate
+            resolved_paths = [(repository_path / Path(entry)).resolve() for entry in entries]
+            break
+
+        if chosen_fmt is None:
+            available = ", ".join(split_spec.keys()) or "<none>"
+            raise ValueError(
+                f"Split '{split}' does not provide any of the requested formats {search_order}. "
+                f"Available formats: {available}"
             )
 
-        return cls(manifest=manifest_path, **kwargs)
+        kwargs["fmt"] = fmt_override or chosen_fmt
+        return cls(paths=resolved_paths, **kwargs)
 
     def __iter__(self) -> Iterator[Episode]:
         rng = random.Random(self.seed)

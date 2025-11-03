@@ -156,7 +156,7 @@ Workflow per episode:
    - Morphology descriptors (`quick_morphology_features`), including absorbing/periodic flags.
 5. Write enriched records to `downsampled_enriched.jsonl` and full meta to `downsampled_enriched_meta.jsonl`.
 
-This stage also upgrades the schema version to `1.0.1` and inlines the base64 rule table so the later dataset packages retain full provenance.
+This stage also upgrades the schema version to `1.0.2`, inlines the base64 rule table so the later dataset packages retain full provenance, and emits coverage/morphology descriptors needed for downstream analysis.
 
 ---
 
@@ -166,26 +166,30 @@ We rerun `pool_sanity_check.py` on the enriched shard to ensure that reconstruct
 
 ---
 
-## 7. Split construction – `scripts/split_pool.py`
+## 7. Coverage-driven resplitting – `scripts/resplit_dataset.py`
 
-### Strategy
+To build the 1.0.2 release we collapse the previously balanced splits, recompute key coverage statistics, and carve out a new evaluation regime:
 
-1. Load the 110 000 enriched episodes.
-2. Sort by `(observed_coverage_fraction, -lambda)` to surface low-coverage, high-λ rules.
-3. Carve out the **test_extrapolation** set by taking the first 1 000 records from the sorted list. These examples intentionally differ from the train regime (scarce observations, dynamic behaviour near the chaotic boundary).
-4. Shuffle the remaining 109 000 episodes with RNG seed 12345 and slice:
+1. Load every enriched episode from the extended dataset.
+2. For each episode compute:
+   - `query_window_coverage_weighted`
+   - `query_window_coverage_unique`
+   - `query_window_avg_depth`
+   - `coverage_windows` (promoted from the nested coverage block)
+   - `ncd_train_query_solution`
+3. Sort the merged pool by `query_window_coverage_weighted` (lowest first) and take the first 1 000 episodes as **test_extrapolation**.
+4. Shuffle the remaining episodes with RNG seed 12345 and slice:
    - `train`: 100 000
    - `val`: 1 000
    - `test_interpolation`: 1 000
-5. Any remainder is dropped; in the November 2024 run the target sizes exhausted the pool exactly, so no `unused.jsonl` was produced.
 
-Outputs in `artifacts/processing/pool_downsampled/splits/` include both payload (`*.jsonl`) and meta (`*_meta.jsonl`) files for each split.
+The script outputs refreshed JSONL splits under `artifacts/processing/resplit_splits/`, ready for packaging.
 
 ---
 
 ## 8. Hugging Face packaging – `scripts/build_hf_dataset.py`
 
-The final step transforms the splits into two dataset packages under `artifacts/datasets/`:
+The final step consumes the coverage-aware splits and transforms them into two dataset packages under `artifacts/datasets/`:
 
 - `cellarc_100k/` – lightweight JSONL (id/train/query/solution) plus Parquet mirrors.
 - `cellarc_100k_meta/` – identical Parquet files, but JSONL retains full metadata + rule tables.
@@ -242,4 +246,3 @@ Running `scripts/processing_pipeline.py` performs steps 2–8 automatically (ste
 - **Test extrapolation slice**: sorting by coverage then λ concentrates the evaluation shift on under-observed, high-chaoticity regimes—matching the narrative goal of testing extrapolation.
 
 This pipeline, along with the recorded seeds and fingerprints, supports exact regeneration of the published datasets.
-
