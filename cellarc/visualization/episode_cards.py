@@ -3,18 +3,41 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import numpy as np
 
 from eval.common import EpisodeRecord
 from cellarc.generation.cax_runner import AutomatonRunner
+from cellarc.generation.reconstruction import (
+    infer_dataset_config,
+    reconstruct_rule_table_payload,
+)
 from cellarc.generation.serialization import deserialize_rule_table
 from cellarc.utils import de_bruijn_cycle
-from cellarc.visualization.ca_rollout_viz import _ensure_rule_table
-
 from cellarc.visualization.palette import BG_COLOR, PALETTE
+
+
+def _ensure_rule_table(entry: EpisodeRecord) -> Dict[str, object]:
+    """Guarantee that an episode record has an associated rule-table payload."""
+
+    record = entry.record
+    rule_table = record.get("rule_table")
+    if isinstance(rule_table, dict):
+        return rule_table
+
+    meta = record.get("meta") or {}
+    config = infer_dataset_config(meta)
+    if config is None:
+        raise ValueError(
+            "Episode is missing a rule_table and cannot be reconstructed from metadata."
+        )
+
+    payload = reconstruct_rule_table_payload(meta, config=config)
+    record["rule_table"] = payload
+    return payload
 
 
 def runner_from_record(rec: Dict[str, Any], *, rng_seed: int = 0) -> AutomatonRunner:
@@ -67,8 +90,23 @@ def show_episode_card(
     tau_max: Optional[int] = None,
     rng_seed: int = 0,
     show_core: bool = True,
-):
-    """Render an ARC-style card with train I/O bands and an unrolled CA view."""
+    show_metadata: bool = False,
+    metadata_fields: Optional[Sequence[str]] = None,
+    metadata_formatter: Optional[Callable[[Dict[str, Any]], str]] = None,
+) -> Figure:
+    """
+    Render an ARC-style card with train I/O bands and an unrolled CA view.
+
+    Args:
+        rec: Serialized episode record containing train/query I/O and metadata.
+        palette: Optional matplotlib colormap override.
+        tau_max: Optional rollout depth override when reconstructing the CA.
+        rng_seed: Seed used when reconstructing stochastic automata.
+        show_core: Insert masked spacer rows between samples when True.
+        show_metadata: When True, render a summary of metadata beneath the plots.
+        metadata_fields: Explicit list of metadata keys to display.
+        metadata_formatter: Callable returning a custom metadata string.
+    """
     space_time = space_time_from_record(rec, tau_max=tau_max, rng_seed=rng_seed)
     meta = rec["meta"]
     window = int(meta["window"])
@@ -78,58 +116,23 @@ def show_episode_card(
 
     cmap = palette or PALETTE
 
-    fig = plt.figure(figsize=(10, 4), facecolor=BG_COLOR)
+    fig = plt.figure(figsize=(11, 6.2), facecolor=BG_COLOR)
+    grid = fig.add_gridspec(2, 1, height_ratios=(3.2, 1.4), hspace=0.35)
 
-    # Left panel: stacked train pairs plus the query/solution pair.
-    ax_left = fig.add_subplot(1, 2, 1)
-    ax_left.set_facecolor(BG_COLOR)
-    tiles = []
-    for pair in rec.get("train", []):
-        inp = np.asarray(pair["input"], dtype=int)[None, :]
-        out = np.asarray(pair["output"], dtype=int)[None, :]
-        tiles.extend([inp, out])
-        if show_core:
-            gap_width = max(inp.shape[1], out.shape[1])
-            gap = np.full((1, gap_width), -1, dtype=int)
-            tiles.append(gap)
-    query = rec.get("query")
-    solution = rec.get("solution")
-    if query is not None and solution is not None:
-        q_arr = np.asarray(query, dtype=int)[None, :]
-        s_arr = np.asarray(solution, dtype=int)[None, :]
-        tiles.extend([q_arr, s_arr])
-        if show_core:
-            gap_width = max(q_arr.shape[1], s_arr.shape[1])
-            tiles.append(np.full((1, gap_width), -1, dtype=int))
-    if tiles:
-        max_width = max(tile.shape[1] for tile in tiles)
-        padded_tiles = [
-            tile
-            if tile.shape[1] == max_width
-            else np.pad(
-                tile,
-                ((0, 0), (0, max_width - tile.shape[1])),
-                mode="constant",
-                constant_values=-1,
-            )
-            for tile in tiles
-        ]
-        # Pad rows so the stacked image renders even when I/O widths differ.
-        stack = np.ma.masked_equal(np.concatenate(padded_tiles, axis=0), -1)
-        ax_left.imshow(stack, aspect="auto", interpolation="nearest", cmap=cmap)
-    ax_left.set_title("Train & Query I/O")
-    ax_left.axis("off")
-
-    # Right panel: space–time diagram with training spans highlighted.
-    ax_right = fig.add_subplot(1, 2, 2)
+    # Top panel: space–time diagram with training spans highlighted.
+    ax_right = fig.add_subplot(grid[0, 0])
     ax_right.set_facecolor(BG_COLOR)
     space_width = space_time.shape[1] if space_time.ndim > 1 else 0
     ax_right.imshow(
-        space_time, aspect="auto", interpolation="nearest", cmap=cmap, zorder=0
+        space_time, aspect="equal", interpolation="nearest", cmap=cmap, zorder=0
     )
-    ax_right.set_title("Unrolled CA (rows = time)")
+    ax_right.set_title("Unrolled CA")
     if space_width:
         ax_right.set_xlim(-0.5, space_width - 0.5)
+    ax_right.set_xticks([])
+    ax_right.set_yticks([])
+    for spine in ax_right.spines.values():
+        spine.set_visible(False)
 
     def _draw_outline(x: float, y: float, width: float, height: float, *, dashed: bool):
         shadow = plt.Rectangle(
@@ -179,8 +182,6 @@ def show_episode_card(
         width = length + 2 * half
         _draw_wrapped(start - half, width, tau, dashed=False)
         _draw_wrapped(start - half, width, tau + steps, dashed=False)
-    ax_right.set_xlabel("space")
-    ax_right.set_ylabel("time")
     query_span = meta.get("query_span")
     if query_span:
         q_start = int(query_span.get("start", 0))
@@ -189,7 +190,103 @@ def show_episode_card(
         highlight_width = q_len + 2 * half
         _draw_wrapped(q_start - half, highlight_width, q_tau, dashed=True)
         _draw_wrapped(q_start - half, highlight_width, q_tau + steps, dashed=True)
-    plt.tight_layout()
+
+    # Bottom panel: horizontally arranged I/O samples.
+    columns: List[List[tuple[Optional[str], Optional[np.ndarray]]]] = []
+
+    for pair in rec.get("train", []):
+        inp = np.asarray(pair["input"], dtype=int)[None, :]
+        out = np.asarray(pair["output"], dtype=int)[None, :]
+        columns.append([("I", inp), ("O", out)])
+        if show_core:
+            columns.append([(None, None), (None, None)])
+    query = rec.get("query")
+    solution = rec.get("solution")
+    if query is not None and solution is not None:
+        q_arr = np.asarray(query, dtype=int)[None, :]
+        s_arr = np.asarray(solution, dtype=int)[None, :]
+        columns.append([("Q", q_arr), ("S", s_arr)])
+
+    if columns and all(entry[0] is None for entry in columns[-1]):
+        columns.pop()
+
+    if columns:
+        width_ratios: List[float] = []
+        for column in columns:
+            widths = [tile.shape[1] for _, tile in column if tile is not None]
+            width_ratios.append(float(max(widths)) if widths else 0.5)
+        bottom_spec = grid[1, 0].subgridspec(
+            2,
+            len(columns),
+            wspace=0.1,
+            hspace=0.05,
+            width_ratios=width_ratios,
+        )
+        for col_idx, column in enumerate(columns):
+            for row_idx, (label, tile) in enumerate(column):
+                ax_tile = fig.add_subplot(bottom_spec[row_idx, col_idx])
+                ax_tile.set_facecolor(BG_COLOR)
+                if tile is None:
+                    ax_tile.axis("off")
+                    continue
+                ax_tile.imshow(tile, aspect="equal", interpolation="nearest", cmap=cmap)
+                ax_tile.set_xticks([])
+                ax_tile.set_yticks([])
+                for spine in ax_tile.spines.values():
+                    spine.set_visible(False)
+                if label:
+                    ax_tile.text(
+                        0.5,
+                        1.08,
+                        label,
+                        transform=ax_tile.transAxes,
+                        ha="center",
+                        va="bottom",
+                        fontsize=9,
+                        color="#222222",
+                    )
+
+    metadata_text: Optional[str] = None
+    if metadata_formatter is not None:
+        metadata_text = metadata_formatter(meta)
+    else:
+        fields: Optional[Sequence[str]] = metadata_fields
+        if fields is None and show_metadata:
+            fields = ("split", "family", "alphabet_size", "radius", "steps", "lambda")
+        if fields:
+            parts: List[str] = []
+            for key in fields:
+                value = meta.get(key)
+                if value is None:
+                    continue
+                label = "lambda" if key == "lambda" else key.replace("_", " ")
+                if isinstance(value, float):
+                    value_str = f"{value:.3f}"
+                else:
+                    value_str = str(value)
+                parts.append(f"{label}: {value_str}")
+            if parts:
+                metadata_text = " | ".join(parts)
+
+    bottom_margin = 0.22 if metadata_text else 0.12
+    top_margin = 0.88 if metadata_text else 0.9
+    fig.subplots_adjust(
+        left=0.06,
+        right=0.98,
+        top=top_margin,
+        bottom=bottom_margin,
+        hspace=0.35,
+    )
+    if metadata_text:
+        fig.text(
+            0.5,
+            0.035,
+            metadata_text,
+            ha="center",
+            va="center",
+            fontsize=9,
+            color="#222222",
+        )
     return fig
 
 

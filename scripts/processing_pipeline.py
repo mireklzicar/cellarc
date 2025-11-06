@@ -55,9 +55,9 @@ def main() -> int:
                 "--outdir",
                 str(pool_dir),
                 "--per-shard",
-                "10000",
+                "3000",
                 "--shards",
-                "6",
+                "3",
                 "--family-bonus",
                 "8",
                 "--train-examples",
@@ -71,12 +71,13 @@ def main() -> int:
                 "--coverage-modes",
                 "chunked",
                 "uniform",
-                "--sample-timeout",
-                "0.1",
+                "--coverage-min",
+                "0.95",
+                "--coverage-max",
+                "1.0",
+                "--query-within-coverage",
                 "--max-attempts-per-item",
                 "20",
-                "--no-complexity",
-                "--no-morphology",
             ]
         )
 
@@ -166,6 +167,31 @@ def main() -> int:
             str(enriched_path),
             "--output-dir",
             str(downsampled_dir / "splits"),
+            "--train-count",
+            "9000",
+            "--val-count",
+            "500",
+            "--test-interp-count",
+            "500",
+            "--test-extra-count",
+            "1000",
+        ]
+    )
+
+    # Step 8: build HF-friendly dataset packages
+    run(
+        [
+            sys.executable,
+            "scripts/build_hf_dataset.py",
+            "--source-dir",
+            str(downsampled_dir / "splits"),
+            "--target-root",
+            "artifacts/datasets",
+            "--dataset-name",
+            "cellarc_highcov",
+            "--extended-suffix",
+            "_meta",
+            "--overwrite",
         ]
     )
 

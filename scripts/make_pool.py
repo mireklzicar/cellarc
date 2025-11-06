@@ -7,18 +7,11 @@ Requires: this repo's package `cellarc` importable; tqdm optional.
 """
 
 from __future__ import annotations
-import argparse, random
+import argparse, math, random
 from pathlib import Path
 from typing import Dict, List, Optional
 from tqdm import tqdm
 from cellarc.generation.dataset import generate_dataset_jsonl
-
-# Mixture for coverage fractions: lots of low-ρ (hard), some mid, some full
-def cov_sampler(rng):
-    u = rng.random()
-    if u < 0.50:   return rng.uniform(0.05, 0.25)  # low
-    if u < 0.85:   return rng.uniform(0.25, 0.60)  # mid
-    return rng.uniform(0.80, 0.90)                 # small high tail
 
 # Nearly uniform family mix (we’ll also do single-family shards to guarantee coverage)
 UNIFORM_FAMILIES: Dict[str, float] = {
@@ -57,6 +50,23 @@ def main():
                     help="Maximum seconds allowed per sampled episode (default: no limit)")
     ap.add_argument("--max-attempts-per-item", type=int, default=200,
                     help="Attempt budget multiplier per episode before aborting")
+    ap.add_argument("--coverage-min", type=float, default=0.9,
+                    help="Lower bound for sampling coverage fractions (default: 0.9).")
+    ap.add_argument("--coverage-max", type=float, default=1.0,
+                    help="Upper bound for sampling coverage fractions (default: 1.0).")
+    ap.add_argument(
+        "--allow-query-outside-coverage",
+        dest="query_within_coverage",
+        action="store_false",
+        help="Permit query windows to fall outside the coverage partitions.",
+    )
+    ap.add_argument(
+        "--query-within-coverage",
+        dest="query_within_coverage",
+        action="store_true",
+        help="Force query windows to be sampled from covered regions (default).",
+    )
+    ap.set_defaults(query_within_coverage=True)
     ap.add_argument(
         "--include-rule-table",
         action="store_true",
@@ -71,6 +81,18 @@ def main():
     rng = random.Random(args.seed)
     args.outdir.mkdir(parents=True, exist_ok=True)
     seen = set()
+
+    coverage_min = min(args.coverage_min, args.coverage_max)
+    coverage_max = max(args.coverage_min, args.coverage_max)
+    if not (0.0 < coverage_min <= 1.0) or not (0.0 < coverage_max <= 1.0):
+        raise ValueError("coverage bounds must lie in (0, 1].")
+    if coverage_min > coverage_max:
+        coverage_min, coverage_max = coverage_max, coverage_min
+
+    def coverage_sampler(local_rng: random.Random) -> float:
+        if math.isclose(coverage_min, coverage_max):
+            return float(coverage_max)
+        return float(local_rng.uniform(coverage_min, coverage_max))
 
     def run_shard(tag: str,
                   *,
@@ -95,13 +117,13 @@ def main():
             family_mix=family_mix,
             unique_by=args.unique_by,
             balance_by=args.balance_by,
-            coverage_fraction=cov_sampler,          # callable!
+            coverage_fraction=coverage_sampler,          # callable!
             coverage_mode=coverage_mode,
             cap_lambda=None,
             cap_entropy=None,
             compute_complexity=not args.no_complexity,
             annotate_morphology=not args.no_morphology,
-            query_within_coverage=False,
+            query_within_coverage=args.query_within_coverage,
             construction=construction,
             unroll_tau_max=16,
             seen_fingerprints=seen,
