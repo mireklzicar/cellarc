@@ -17,9 +17,10 @@ dataset synthesis, Hugging Face integration) install the full extra:
 pip install cellarc[all]
 ```
 
-The wheel looks for local mirrors inside `artifacts/hf_cellarc` and
-`artifacts/datasets` before downloading from the Hub. Set `CELLARC_HOME` to
-override the cache location.
+Dataset snapshots are fetched directly from the Hugging Face Hub and cached in
+`~/.cache/cell_arc` (override with the `CELLARC_HOME` environment variable).
+There are no repository fallbacks; if a download fails, the loader raises an
+error so the issue can be fixed explicitly.
 
 ## Working with datasets
 
@@ -51,6 +52,17 @@ The available remote splits are `train`, `val`, `test_interpolation`, and
 loader) and `data/<split>.parquet`; set `fmt="parquet"` when using
 `datasets`/`pyarrow` for faster IO.
 
+### Refreshing the cache
+
+Force-refresh a snapshot when you need a clean copy:
+
+```bash
+python - <<'PY'
+from cellarc import download_benchmark
+download_benchmark(name="cellarc_100k", include_metadata=True, force_download=True)
+PY
+```
+
 ## Optional generation stack
 
 With the `all` extra installed you gain access to the sampling and simulation
@@ -71,6 +83,6 @@ the extra or vendor the required frameworks manually.
 
 ## Further reading
 
-- Dataset cards: `artifacts/datasets/cellarc_100k/README.md` and
-  `artifacts/datasets/cellarc_100k_meta/README.md`.
+- Dataset cards live at https://huggingface.co/datasets/mireklzicar/cellarc_100k
+  and https://huggingface.co/datasets/mireklzicar/cellarc_100k_meta.
 - Solver experiments: `SOLVER_RESULTS.md`.

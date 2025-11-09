@@ -1,11 +1,22 @@
 # CellARc Dataset Creation Pipeline
 
-This document is the authoritative record for reproducing the datasets living in `artifacts/datasets/cellarc_100k` and `artifacts/datasets/cellarc_100k_meta`. The same splits are mirrored under `artifacts/hf_cellarc/hf-cellarc_100k(_meta)` for Hugging Face uploads. All commands are meant to run from the repository root with Python 3.11 and the dependencies listed in `requirements.txt`.
+This document is the authoritative record for reproducing the datasets that ship on
+the Hugging Face Hub (`mireklzicar/cellarc_100k(_meta)`). Local exports are staged
+under `${CELLARC_HOME:-~/.cache/cell_arc}/exports`, which mirrors the Hub layout
+and can be synced with `huggingface_hub`. All commands are meant to run from the
+repository root with Python 3.11 and the dependencies listed in
+`requirements.txt`.
 
-The current release contains **103 000** enriched cellular automaton (CA) episodes (train 100 000, validation 1 000, test_interpolation 1 000, test_extrapolation 1 000). You can verify the final artefacts via:
+The current release contains **103 000** enriched cellular automaton (CA)
+episodes (train 100 000, validation 1 000, test_interpolation 1 000,
+test_extrapolation 1 000). You can verify the final artefacts via:
 
-- `artifacts/datasets/cellarc_100k_meta/data_files.json` - split sizes and byte counts.
-- `artifacts/datasets/cellarc_100k_meta/dataset_stats.json` - aggregate metrics. Notably, `test_extrapolation` has the **lowest** `coverage_fraction` (approx. 0.196), the **highest** Langton lambda (approx. 0.582) and entropy (approx. 1.30), matching the intended extrapolation regime.
+- `${CELLARC_HOME:-~/.cache/cell_arc}/exports/cellarc_100k_meta/data_files.json`
+  – split sizes and byte counts.
+- `${CELLARC_HOME:-~/.cache/cell_arc}/exports/cellarc_100k_meta/dataset_stats.json`
+  – aggregate metrics. Notably, `test_extrapolation` has the **lowest**
+  `coverage_fraction` (approx. 0.196), the **highest** Langton lambda (approx.
+  0.582) and entropy (approx. 1.30), matching the intended extrapolation regime.
 
 ---
 
@@ -32,9 +43,9 @@ python scripts/resample_highcov.py ...
 python scripts/split_pool.py ...
 
 # 9. Packaging
-python scripts/build_hf_dataset.py ...                             # writes artifacts/datasets/*
+python scripts/build_hf_dataset.py ...                             # writes ${CELLARC_HOME:-~/.cache/cell_arc}/exports/*
 python scripts/build_hf_dataset.py --target-root artifacts/hf_cellarc ...
-```
+``` 
 
 The remainder of this document expands every step, explains why it exists, and records the exact arguments used when producing the published dataset.
 
@@ -198,13 +209,15 @@ Any leftovers beyond the requested split sizes are written to `unused.jsonl` for
 
 ## 9. Packaging -- `scripts/build_hf_dataset.py`
 
-We run the exporter twice: once for the local `artifacts/datasets/*` tree (used internally) and once for the staging tree we sync with the Hugging Face Hub.
+We run the exporter twice: once for the local
+`${CELLARC_HOME:-~/.cache/cell_arc}/exports/*` tree (used internally) and once
+for the staging tree we sync with the Hugging Face Hub.
 
 ```bash
 # Local artefacts used throughout the repo
 python scripts/build_hf_dataset.py \
   --source-dir artifacts/processing/resampled_highcov/splits \
-  --target-root artifacts/datasets \
+  --target-root "${CELLARC_HOME:-~/.cache/cell_arc}/exports" \
   --dataset-name cellarc_100k \
   --extended-suffix _meta \
   --chunk-size 1000 \
@@ -232,11 +245,11 @@ Each invocation emits **two** directories:
 
 After packaging, double-check:
 
-1. `artifacts/datasets/cellarc_100k_meta/data_files.json`
+1. `${CELLARC_HOME:-~/.cache/cell_arc}/exports/cellarc_100k_meta/data_files.json`
    - train: 100 000 records, JSONL size approx. 288 MB.
    - val/test_interpolation/test_extrapolation: 1 000 records each.
 
-2. `artifacts/datasets/cellarc_100k_meta/dataset_stats.json`
+2. `${CELLARC_HOME:-~/.cache/cell_arc}/exports/cellarc_100k_meta/dataset_stats.json`
    - Global lambda mean approx. 0.563 (min 0.0156, max 1.0).
    - Coverage fraction mean approx. 0.373 (min 0.069, max 0.938).
    - Train sample length mean approx. 11.83 with exactly five training examples per episode.
@@ -272,4 +285,7 @@ Everything else listed above is required for reproduction. Removing or renaming 
 
 ---
 
-By following the commands and verification steps in this document you can regenerate the dataset artefacts currently checked into `artifacts/datasets` and mirrored in `artifacts/hf_cellarc`, matching the statistics recorded alongside the release.
+By following the commands and verification steps in this document you can recreate
+the export tree under `${CELLARC_HOME:-~/.cache/cell_arc}/exports` and the mirror
+in `artifacts/hf_cellarc`, matching the statistics recorded alongside the
+release.

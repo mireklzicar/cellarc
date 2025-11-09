@@ -8,7 +8,7 @@ Core figures (main paper)
 	2.	Rule-space coverage
 	•	Story: The benchmark spans alphabets, radii, and time-steps.
 	•	What: Three histograms (or a small multiples row): alphabet_size k, radius r, steps t. Add a scatter of (r, t) with diagonal bands of constant window W=2rt+1 annotated.
-	•	Source: artifacts/datasets/*/dataset_stats.json produced by build_hf_dataset.py.
+	•	Source: `${CELLARC_HOME:-~/.cache/cell_arc}/exports/*/dataset_stats.json` produced by build_hf_dataset.py.
 	3.	λ × coverage grid (before/after downsampling)
 	•	Story: Stratified selection achieves broad support, not just dense clusters.
 	•	What: Two 2D heatmaps: bin counts over (Langton λ bin, observed coverage fraction bin) for raw pool vs. downsampled pool.

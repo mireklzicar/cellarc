@@ -5,15 +5,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-DATASET_ROOT = Path("artifacts/datasets/cellarc_100k_meta/data")
+from cellarc import download_benchmark
 OUTPUT_DIR = Path("figures") / "dataset_stats"
 FAMILY_MIX_JSON = OUTPUT_DIR / "family_mix_per_split.json"
+DEFAULT_CACHE_HOME = Path(os.getenv("CELLARC_HOME", Path.home() / ".cache" / "cell_arc"))
+DEFAULT_DATASET_ROOT = DEFAULT_CACHE_HOME / "hf-cellarc_100k_meta" / "data"
 
 SPLIT_FILES: Dict[str, str] = {
     "train": "train.jsonl",
@@ -32,6 +35,29 @@ SPLIT_COLORS = {
 
 TAU = np.sqrt(2 * np.pi)
 LAMBDA_BIN_ORDER = ["chaotic", "edge", "ordered"]
+PER_SPLIT_BAR_WIDTH = 0.8 / 3  # narrower bars for per-split stacks
+PER_SPLIT_FONT_SCALE = 2.0
+PER_SPLIT_BAR_TEXT_SIZE = int(7 * PER_SPLIT_FONT_SCALE)
+PER_SPLIT_CATEGORY_SPACING = 0.33  # tighter distance between stacked split bars
+JOINT_BAR_WIDTH = 0.55  # wider bars for the joint figure where we have more horizontal space
+
+
+def resolve_dataset_root(explicit: Optional[Path]) -> Path:
+    """Return the dataset directory, downloading from the Hub when needed."""
+
+    if explicit:
+        return explicit
+    default_root = DEFAULT_DATASET_ROOT
+    if default_root.exists():
+        return default_root
+    repo_path = download_benchmark(name="cellarc_100k", include_metadata=True)
+    resolved = repo_path / "data"
+    if not resolved.exists():
+        raise FileNotFoundError(
+            "Unable to locate dataset JSONL files. Specify --dataset-root or ensure the "
+            "downloaded snapshot contains a 'data' directory."
+        )
+    return resolved
 
 
 def _load_split(path: Path, split: str) -> Iterable[dict]:
@@ -160,6 +186,19 @@ def _format_lambda_label(name: str) -> str:
     return str(name).replace("_", " ").title()
 
 
+def _format_split_label(name: str, *, long: bool = False) -> str:
+    if not name:
+        return ""
+    normalized = str(name).lower()
+    if normalized == "test_interpolation":
+        suffix = "interpolation" if long else "interp."
+        return f"test\n({suffix})"
+    if normalized == "test_extrapolation":
+        suffix = "extrapolation" if long else "extra."
+        return f"test\n({suffix})"
+    return str(name).replace("_", " ")
+
+
 def _gaussian_kde(values: np.ndarray, grid: np.ndarray) -> np.ndarray:
     if values.size < 2:
         return np.zeros_like(grid)
@@ -216,6 +255,262 @@ def plot_split_kde_distributions(df: pd.DataFrame, output_dir: Path) -> Path:
     plt.close(fig)
     return output_path
 
+def plot_family_and_lambda_mix_joint(df: pd.DataFrame, output_dir: Path) -> Path:
+    fam_df = df.dropna(subset=["family", "split"])
+    fam_pivot = (
+        fam_df.pivot_table(index="split", columns="family", aggfunc="size", fill_value=0, observed=False)
+        .reindex(SPLIT_ORDER)
+        .fillna(0)
+    )
+    fam_totals = fam_pivot.sum(axis=1).replace(0, np.nan)
+    fam_prop = fam_pivot.div(fam_totals, axis=0).fillna(0)
+    fam_labels = {c: _format_family_label(c) for c in fam_pivot.columns}
+
+    lam_df = df.dropna(subset=["lambda_bin", "split"])
+    lam_pivot = (
+        lam_df.pivot_table(index="split", columns="lambda_bin", aggfunc="size", fill_value=0, observed=False)
+        .reindex(SPLIT_ORDER)
+        .fillna(0)
+    )
+    present = list(lam_pivot.columns)
+    lam_cols = [x for x in LAMBDA_BIN_ORDER if x in present]
+    lam_cols.extend([x for x in present if x not in lam_cols])
+    lam_pivot = lam_pivot[lam_cols]
+    lam_totals = lam_pivot.sum(axis=1).replace(0, np.nan)
+    lam_prop = lam_pivot.div(lam_totals, axis=0).fillna(0)
+    lam_labels = {c: _format_lambda_label(c) for c in lam_cols}
+
+    if fam_prop.empty or lam_prop.empty:
+        raise RuntimeError("Need both family and lambda metadata to build the joint chart.")
+
+    output_path = output_dir / "family_and_lambda_mix_joint.png"
+    base_font = float(plt.rcParams.get("font.size", 10.0))
+    rc_overrides = {"font.size": base_font * PER_SPLIT_FONT_SCALE}
+
+    n_splits = len(SPLIT_ORDER)
+    split_positions = np.arange(n_splits, dtype=float)
+    split_tick_labels = [_format_split_label(name, long=True) for name in SPLIT_ORDER]
+
+    def _legend_cols(labels: List[str]) -> int:
+        if len(labels) > 12:
+            return 3
+        if len(labels) > 5:
+            return 2
+        return 1
+
+    def _draw_stack(ax: plt.Axes, proportions: pd.DataFrame, formatted: Dict[str, str], cmap, legend_title: str) -> None:
+        bottom = np.zeros(n_splits)
+        handles: List[object] = []
+        labels: List[str] = []
+        for idx, column in enumerate(proportions.columns):
+            values = proportions[column].reindex(SPLIT_ORDER).values
+            rects = ax.bar(
+                split_positions,
+                values,
+                width=JOINT_BAR_WIDTH,
+                bottom=bottom,
+                color=cmap(idx % cmap.N),
+                edgecolor="white",
+                label=formatted.get(column, column),
+            )
+            for split_idx, rect in enumerate(rects):
+                height = rect.get_height()
+                if height <= 0 or height < 0.035:
+                    continue
+                text_y = bottom[split_idx] + height / 2
+                ax.text(
+                    rect.get_x() + rect.get_width() / 2,
+                    text_y,
+                    f"{height*100:.0f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=PER_SPLIT_BAR_TEXT_SIZE,
+                    color="white",
+                )
+            bottom += values
+            if rects:
+                handles.append(rects[0])
+                labels.append(formatted.get(column, column))
+        ax.set_xticks(split_positions)
+        ax.set_xticklabels(split_tick_labels)
+        ax.set_ylim(0, 1)
+        ax.set_xlim(-0.6, n_splits - 0.4)
+        ax.tick_params(axis="x", labelrotation=0)
+        legend_labels = [label.replace(" ", "\n") for label in labels]
+        ax.legend(
+            handles,
+            legend_labels,
+            title=legend_title,
+            loc="lower left",
+            bbox_to_anchor=(0.0, 1.02),
+            frameon=False,
+            borderaxespad=0.0,
+            ncol=_legend_cols(legend_labels),
+        )
+
+    with plt.rc_context(rc_overrides):
+        fig, axes = plt.subplots(1, 2, figsize=(13.5, 5.6), sharey=True)
+        cmap_fam = plt.get_cmap("tab20")
+        cmap_lam = plt.get_cmap("Set2")
+
+        _draw_stack(axes[0], fam_prop, fam_labels, cmap_fam, "Family")
+        axes[0].set_ylabel("Fraction of episodes")
+        axes[0].set_title("Family mix per split")
+
+        _draw_stack(axes[1], lam_prop, lam_labels, cmap_lam, "λ bin")
+        axes[1].set_title("λ-bin mix per split")
+
+        fig.suptitle("Family & λ-bin composition per split")
+        fig.subplots_adjust(left=0.08, right=0.97, top=0.83, bottom=0.2, wspace=0.25)
+        fig.savefig(output_path)
+        plt.close(fig)
+
+    return output_path
+
+
+def plot_entropy_boxplot(df: pd.DataFrame, output_dir: Path) -> Path:
+    column = "avg_cell_entropy"
+    split_data: List[np.ndarray] = []
+    tick_labels: List[str] = []
+    colors: List[str] = []
+    for split in SPLIT_ORDER:
+        values = df.loc[df["split"] == split, column].dropna().to_numpy()
+        if values.size == 0:
+            continue
+        split_data.append(values)
+        tick_labels.append(_format_split_label(split))
+        colors.append(SPLIT_COLORS.get(split, "#4C72B0"))
+    if not split_data:
+        raise RuntimeError("No cell entropy data available for boxplot.")
+    output_path = output_dir / "cell_entropy_boxplot.png"
+    base_font = float(plt.rcParams.get("font.size", 10.0))
+    rc_overrides = {"font.size": base_font * 1.4}
+    with plt.rc_context(rc_overrides):
+        fig, ax = plt.subplots(figsize=(7.8, 5.2))
+        boxprops = {"linewidth": 1.2}
+        medianprops = {"linewidth": 1.6, "color": "#222222"}
+        bp = ax.boxplot(
+            split_data,
+            tick_labels=tick_labels,
+            patch_artist=True,
+            widths=0.45,
+            showfliers=False,
+            boxprops=boxprops,
+            medianprops=medianprops,
+        )
+        for patch, color in zip(bp["boxes"], colors):
+            patch.set_facecolor(color)
+            patch.set_edgecolor(color)
+            patch.set_alpha(0.55)
+        for whisker in bp["whiskers"]:
+            whisker.set_linewidth(1.0)
+        for cap in bp["caps"]:
+            cap.set_linewidth(1.0)
+        ax.set_ylabel("Average cell entropy")
+        ax.set_title("Cell entropy distribution per split")
+        ax.grid(axis="y", alpha=0.25, linestyle="--", linewidth=0.8)
+        fig.tight_layout()
+        fig.savefig(output_path)
+        plt.close(fig)
+    return output_path
+
+
+def plot_lambda_boxplot(df: pd.DataFrame, output_dir: Path) -> Path:
+    column = "lambda"
+    split_data: List[np.ndarray] = []
+    tick_labels: List[str] = []
+    colors: List[str] = []
+    for split in SPLIT_ORDER:
+        values = df.loc[df["split"] == split, column].dropna().to_numpy()
+        if values.size == 0:
+            continue
+        split_data.append(values)
+        tick_labels.append(_format_split_label(split))
+        colors.append(SPLIT_COLORS.get(split, "#4C72B0"))
+    if not split_data:
+        raise RuntimeError("No Langton λ data available for boxplot.")
+    output_path = output_dir / "lambda_boxplot.png"
+    base_font = float(plt.rcParams.get("font.size", 10.0))
+    rc_overrides = {"font.size": base_font * 1.4}
+    with plt.rc_context(rc_overrides):
+        fig, ax = plt.subplots(figsize=(7.8, 5.2))
+        boxprops = {"linewidth": 1.2}
+        medianprops = {"linewidth": 1.6, "color": "#222222"}
+        bp = ax.boxplot(
+            split_data,
+            tick_labels=tick_labels,
+            patch_artist=True,
+            widths=0.45,
+            showfliers=False,
+            boxprops=boxprops,
+            medianprops=medianprops,
+        )
+        for patch, color in zip(bp["boxes"], colors):
+            patch.set_facecolor(color)
+            patch.set_edgecolor(color)
+            patch.set_alpha(0.55)
+        for whisker in bp["whiskers"]:
+            whisker.set_linewidth(1.0)
+        for cap in bp["caps"]:
+            cap.set_linewidth(1.0)
+        ax.set_ylabel("Langton λ")
+        ax.set_title("Langton λ distribution per split")
+        ax.grid(axis="y", alpha=0.25, linestyle="--", linewidth=0.8)
+        fig.tight_layout()
+        fig.savefig(output_path)
+        plt.close(fig)
+    return output_path
+
+
+def plot_query_window_coverage_boxplot(df: pd.DataFrame, output_dir: Path) -> Path:
+    column = "query_window_coverage_weighted"
+    split_data: List[np.ndarray] = []
+    tick_labels: List[str] = []
+    colors: List[str] = []
+    for split in SPLIT_ORDER:
+        values = df.loc[df["split"] == split, column].dropna().to_numpy()
+        if values.size == 0:
+            continue
+        split_data.append(values)
+        tick_labels.append(_format_split_label(split))
+        colors.append(SPLIT_COLORS.get(split, "#4C72B0"))
+    if not split_data:
+        raise RuntimeError("No query window coverage data available for boxplot.")
+    output_path = output_dir / "query_window_coverage_boxplot.png"
+    base_font = float(plt.rcParams.get("font.size", 10.0))
+    rc_overrides = {"font.size": base_font * 1.4}
+    with plt.rc_context(rc_overrides):
+        fig, ax = plt.subplots(figsize=(7.8, 5.2))
+        boxprops = {"linewidth": 1.2}
+        medianprops = {"linewidth": 1.6, "color": "#222222"}
+        bp = ax.boxplot(
+            split_data,
+            tick_labels=tick_labels,
+            patch_artist=True,
+            widths=0.45,
+            showfliers=False,
+            boxprops=boxprops,
+            medianprops=medianprops,
+        )
+        for patch, color in zip(bp["boxes"], colors):
+            patch.set_facecolor(color)
+            patch.set_edgecolor(color)
+            patch.set_alpha(0.55)
+        for whisker in bp["whiskers"]:
+            whisker.set_linewidth(1.0)
+        for cap in bp["caps"]:
+            cap.set_linewidth(1.0)
+        ax.set_ylabel("Query window coverage (weighted)")
+        coverage_max = max(float(values.max()) for values in split_data)
+        upper = min(1.0, coverage_max + 0.03)
+        ax.set_ylim(0.5, upper)
+        ax.set_title("Query window coverage distribution per split")
+        ax.grid(axis="y", alpha=0.25, linestyle="--", linewidth=0.8)
+        fig.tight_layout()
+        fig.savefig(output_path)
+        plt.close(fig)
+    return output_path
+
 
 def plot_split_sizes(df: pd.DataFrame, output_dir: Path) -> Path:
     counts = (
@@ -248,62 +543,68 @@ def plot_family_mix(df: pd.DataFrame, output_dir: Path, *, summary_path: Optiona
     )
     totals = pivot.sum(axis=1)
     proportions = pivot.div(totals, axis=0)
-    fig = plt.figure(figsize=(8, 5.4))
-    grid = fig.add_gridspec(2, 1, height_ratios=(0.7, 4), hspace=0.02)
-    legend_ax = fig.add_subplot(grid[0, 0])
-    ax = fig.add_subplot(grid[1, 0])
-    legend_ax.axis("off")
-    families = pivot.columns.tolist()
-    formatted = {fam: _format_family_label(fam) for fam in families}
-    cmap = plt.get_cmap("tab20")
-    bottom = np.zeros(len(pivot))
-    handles: List[object] = []
-    labels: List[str] = []
-    for idx, family in enumerate(families):
-        values = proportions[family].values
-        rects = ax.bar(
-            pivot.index.str.replace("_", " "),
-            values,
-            bottom=bottom,
-            label=formatted.get(family, family),
-            color=cmap(idx % cmap.N),
-            edgecolor="white",
-        )
-        for rect_idx, rect in enumerate(rects):
-            height = rect.get_height()
-            if height <= 0:
-                continue
-            if height < 0.035:
-                continue
-            text_y = bottom[rect_idx] + height / 2
-            ax.text(
-                rect.get_x() + rect.get_width() / 2,
-                text_y,
-                f"{height*100:.0f}%",
-                ha="center",
-                va="center",
-                fontsize=7,
-                color="white",
-        )
-        bottom += values
-        if rects:
-            handles.append(rects[0])
-            labels.append(formatted.get(family, family))
-    ax.set_ylabel("Fraction of episodes")
-    ax.set_ylim(0, 1)
-    legend_cols = min(4, max(1, len(handles)))
-    legend_ax.legend(
-        handles,
-        labels,
-        loc="center",
-        ncol=legend_cols,
-        frameon=False,
-        borderaxespad=0.0,
-    )
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.96, bottom=0.08, hspace=0.02)
+    formatted = {fam: _format_family_label(fam) for fam in pivot.columns}
+    families = list(pivot.columns)
     output_path = output_dir / "family_mix_per_split.png"
-    fig.savefig(output_path)
-    plt.close(fig)
+    base_font = float(plt.rcParams.get("font.size", 10.0))
+    rc_overrides = {"font.size": base_font * PER_SPLIT_FONT_SCALE}
+    with plt.rc_context(rc_overrides):
+        fig, ax = plt.subplots(figsize=(8.6, 5.4))
+        cmap = plt.get_cmap("tab20")
+        bottom = np.zeros(len(pivot))
+        handles: List[object] = []
+        labels: List[str] = []
+        split_positions = np.arange(len(pivot)) * PER_SPLIT_CATEGORY_SPACING
+        tick_labels = [_format_split_label(name) for name in pivot.index]
+        for idx, family in enumerate(families):
+            values = proportions[family].values
+            rects = ax.bar(
+                split_positions,
+                values,
+                bottom=bottom,
+                width=PER_SPLIT_BAR_WIDTH,
+                label=formatted.get(family, family),
+                color=cmap(idx % cmap.N),
+                edgecolor="white",
+            )
+            for rect_idx, rect in enumerate(rects):
+                height = rect.get_height()
+                if height <= 0 or height < 0.035:
+                    continue
+                text_y = bottom[rect_idx] + height / 2
+                ax.text(
+                    rect.get_x() + rect.get_width() / 2,
+                    text_y,
+                    f"{height*100:.0f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=PER_SPLIT_BAR_TEXT_SIZE,
+                    color="white",
+                )
+            bottom += values
+            if rects:
+                handles.append(rects[0])
+                labels.append(formatted.get(family, family))
+        ax.set_ylabel("Fraction of episodes")
+        ax.set_ylim(0, 1)
+        if len(split_positions) > 0:
+            margin = PER_SPLIT_BAR_WIDTH * 0.7
+            ax.set_xlim(split_positions[0] - margin, split_positions[-1] + margin)
+        ax.set_xticks(split_positions)
+        ax.set_xticklabels(tick_labels)
+        ax.tick_params(axis="x", labelrotation=0)
+        legend_labels = [label.replace(" ", "\n") for label in labels]
+        ax.legend(
+            handles,
+            legend_labels,
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+            frameon=False,
+            borderaxespad=0.0,
+        )
+        fig.subplots_adjust(left=0.12, right=0.78, top=0.95, bottom=0.15)
+        fig.savefig(output_path)
+        plt.close(fig)
     if summary_path:
         formatted_proportions = proportions.rename(columns=formatted)
         mean_per_family = {
@@ -336,7 +637,7 @@ def plot_family_mix(df: pd.DataFrame, output_dir: Path, *, summary_path: Optiona
     return output_path
 
 
-def plot_lambda_mix(df: pd.DataFrame, output_dir: Path) -> Path:
+def plot_lambda_mix(df: pd.DataFrame, output_dir: Path, *, summary_path: Optional[Path] = None) -> Path:
     data = df.dropna(subset=["lambda_bin", "split"])
     if data.empty:
         raise RuntimeError("No lambda bin metadata available.")
@@ -353,59 +654,96 @@ def plot_lambda_mix(df: pd.DataFrame, output_dir: Path) -> Path:
     pivot = pivot[ordered_cols]
     totals = pivot.sum(axis=1)
     proportions = pivot.div(totals.replace(0, np.nan), axis=0).fillna(0)
-    fig = plt.figure(figsize=(8, 5.4))
-    grid = fig.add_gridspec(2, 1, height_ratios=(0.7, 4), hspace=0.02)
-    legend_ax = fig.add_subplot(grid[0, 0])
-    ax = fig.add_subplot(grid[1, 0])
-    legend_ax.axis("off")
-    cmap = plt.get_cmap("Set2")
-    bottom = np.zeros(len(pivot))
-    handles: List[object] = []
-    labels: List[str] = []
     formatted = {name: _format_lambda_label(name) for name in ordered_cols}
-    for idx, name in enumerate(ordered_cols):
-        values = proportions[name].values
-        rects = ax.bar(
-            pivot.index.str.replace("_", " "),
-            values,
-            bottom=bottom,
-            label=formatted.get(name, name),
-            color=cmap(idx % cmap.N),
-            edgecolor="white",
-        )
-        for rect_idx, rect in enumerate(rects):
-            height = rect.get_height()
-            if height <= 0 or height < 0.035:
-                continue
-            text_y = bottom[rect_idx] + height / 2
-            ax.text(
-                rect.get_x() + rect.get_width() / 2,
-                text_y,
-                f"{height*100:.0f}%",
-                ha="center",
-                va="center",
-                fontsize=7,
-                color="white",
-            )
-        bottom += values
-        if rects:
-            handles.append(rects[0])
-            labels.append(formatted.get(name, name))
-    ax.set_ylabel("Fraction of episodes")
-    ax.set_ylim(0, 1)
-    legend_cols = min(4, max(1, len(handles)))
-    legend_ax.legend(
-        handles,
-        labels,
-        loc="center",
-        ncol=legend_cols,
-        frameon=False,
-        borderaxespad=0.0,
-    )
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.96, bottom=0.08, hspace=0.02)
     output_path = output_dir / "lambda_mix_per_split.png"
-    fig.savefig(output_path)
-    plt.close(fig)
+    base_font = float(plt.rcParams.get("font.size", 10.0))
+    rc_overrides = {"font.size": base_font * PER_SPLIT_FONT_SCALE}
+    with plt.rc_context(rc_overrides):
+        fig, ax = plt.subplots(figsize=(8.6, 5.4))
+        cmap = plt.get_cmap("Set2")
+        bottom = np.zeros(len(pivot))
+        handles: List[object] = []
+        labels: List[str] = []
+        split_positions = np.arange(len(pivot)) * PER_SPLIT_CATEGORY_SPACING
+        tick_labels = [_format_split_label(name) for name in pivot.index]
+        for idx, name in enumerate(ordered_cols):
+            values = proportions[name].values
+            rects = ax.bar(
+                split_positions,
+                values,
+                bottom=bottom,
+                width=PER_SPLIT_BAR_WIDTH,
+                label=formatted.get(name, name),
+                color=cmap(idx % cmap.N),
+                edgecolor="white",
+            )
+            for rect_idx, rect in enumerate(rects):
+                height = rect.get_height()
+                if height <= 0 or height < 0.035:
+                    continue
+                text_y = bottom[rect_idx] + height / 2
+                ax.text(
+                    rect.get_x() + rect.get_width() / 2,
+                    text_y,
+                    f"{height*100:.0f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=PER_SPLIT_BAR_TEXT_SIZE,
+                    color="white",
+                )
+            bottom += values
+            if rects:
+                handles.append(rects[0])
+                labels.append(formatted.get(name, name))
+        ax.set_ylabel("Fraction of episodes")
+        ax.set_ylim(0, 1)
+        if len(split_positions) > 0:
+            margin = PER_SPLIT_BAR_WIDTH * 0.7
+            ax.set_xlim(split_positions[0] - margin, split_positions[-1] + margin)
+        ax.set_xticks(split_positions)
+        ax.set_xticklabels(tick_labels)
+        ax.tick_params(axis="x", labelrotation=0)
+        legend_labels = [label.replace(" ", "\n") for label in labels]
+        ax.legend(
+            handles,
+            legend_labels,
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),
+            frameon=False,
+            borderaxespad=0.0,
+        )
+        fig.subplots_adjust(left=0.12, right=0.78, top=0.95, bottom=0.15)
+        fig.savefig(output_path)
+        plt.close(fig)
+    if summary_path:
+        formatted_proportions = proportions.rename(columns=formatted)
+        mean_per_bin = {
+            name: float(value)
+            for name, value in formatted_proportions.mean(axis=0).to_dict().items()
+        }
+        per_split = {
+            split: {name: float(val) for name, val in values.items()}
+            for split, values in formatted_proportions.to_dict(orient="index").items()
+        }
+        counts_per_split = {
+            split: {formatted.get(name, name): int(val) for name, val in values.items()}
+            for split, values in pivot.to_dict(orient="index").items()
+        }
+        mean_percentage = {name: round(value * 100, 2) for name, value in mean_per_bin.items()}
+        per_split_percentage = {
+            split: {name: round(val * 100, 2) for name, val in values.items()}
+            for split, values in per_split.items()
+        }
+        payload = {
+            "per_split_fraction": per_split,
+            "per_split_percentage": per_split_percentage,
+            "mean_fraction": mean_per_bin,
+            "mean_percentage": mean_percentage,
+            "per_split_counts": counts_per_split,
+        }
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        with summary_path.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
     return output_path
 
 
@@ -460,9 +798,13 @@ def generate_plots(df: pd.DataFrame, output_dir: Path) -> List[Path]:
     plotters = [
         plot_rule_space_histograms,
         plot_split_kde_distributions,
+        plot_family_and_lambda_mix_joint,
         plot_split_sizes,
         lambda df_, out: plot_family_mix(df_, out, summary_path=out / "family_mix_per_split.json"),
-        plot_lambda_mix,
+        lambda df_, out: plot_lambda_mix(df_, out, summary_path=out / "lambda_mix_per_split.json"),
+        plot_entropy_boxplot,
+        plot_lambda_boxplot,
+        plot_query_window_coverage_boxplot,
         plot_family_pies,
     ]
     outputs: List[Path] = []
@@ -476,8 +818,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset-root",
         type=Path,
-        default=DATASET_ROOT,
-        help="Path to directory containing split JSONL files.",
+        default=None,
+        help="Directory containing split JSONL files. Defaults to the Hugging Face cache "
+        "(~/.cache/cell_arc/hf-cellarc_100k_meta/data).",
     )
     parser.add_argument(
         "--output-dir",
@@ -491,7 +834,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     set_plot_style()
-    df = load_dataset(args.dataset_root)
+    dataset_root = resolve_dataset_root(args.dataset_root)
+    df = load_dataset(dataset_root)
     outputs = generate_plots(df, args.output_dir)
     print("Wrote plots:")
     for path in outputs:

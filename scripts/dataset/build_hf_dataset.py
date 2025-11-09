@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import shutil
 from collections import Counter
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ from datasets import Features, Sequence, Value
 
 
 SPLITS: Tuple[str, ...] = ("train", "val", "test_interpolation", "test_extrapolation")
+DEFAULT_EXPORT_ROOT = Path(os.getenv("CELLARC_HOME", Path.home() / ".cache" / "cell_arc")) / "exports"
 
 
 def parse_args() -> argparse.Namespace:
@@ -42,8 +44,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--target-root",
         type=Path,
-        default=Path("artifacts/datasets"),
-        help="Root directory for the generated Hugging Face packages.",
+        default=DEFAULT_EXPORT_ROOT,
+        help="Root directory for the generated Hugging Face packages "
+        "(defaults to ${CELLARC_HOME:-~/.cache/cell_arc}/exports).",
     )
     parser.add_argument(
         "--dataset-name",

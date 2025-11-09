@@ -7,7 +7,11 @@ import argparse
 import shutil
 import subprocess
 import sys
+import os
 from pathlib import Path
+
+CACHE_HOME = Path(os.getenv("CELLARC_HOME", Path.home() / ".cache" / "cell_arc"))
+EXPORT_ROOT = CACHE_HOME / "exports"
 
 
 def run(cmd, *, cwd: Path | None = None) -> None:
@@ -186,7 +190,7 @@ def main() -> int:
             "--source-dir",
             str(downsampled_dir / "splits"),
             "--target-root",
-            "artifacts/datasets",
+            str(EXPORT_ROOT),
             "--dataset-name",
             "cellarc_highcov",
             "--extended-suffix",

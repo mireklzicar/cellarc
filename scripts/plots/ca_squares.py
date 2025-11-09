@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
-"""Render episode cards for a JSONL split."""
+"""Render square-only CA unrollings without metadata or I/O bands."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import random
+import sys
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 import matplotlib
+import numpy as np
 
 # Force a non-interactive backend so the script runs in headless environments.
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402  # pylint: disable=wrong-import-position
 
-import sys
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from cellarc.visualization import show_episode_card
+from cellarc.visualization import BG_COLOR, PALETTE, space_time_from_record
 from scripts.plots._episode_utils import (
     filter_records,
     load_jsonl,
@@ -30,37 +31,81 @@ from scripts.plots._episode_utils import (
 )
 
 
-def render_cards(
-    records: Iterable[dict],
+def _square_history(history: np.ndarray) -> np.ndarray:
+    """Crop or tile the spatial axis so width matches the number of timesteps."""
+    if history.ndim != 2:
+        raise ValueError("Expected 2D space-time array.")
+    height, width = history.shape
+    if height == 0 or width == 0:
+        return history
+    if width == height:
+        return history
+    if width > height:
+        start = max(0, (width - height) // 2)
+        end = start + height
+        if end > width:
+            end = width
+            start = end - height
+        return history[:, start:end]
+    # width < height: tile the spatial dimension until we can crop to square
+    reps = int(np.ceil(height / width))
+    tiled = np.tile(history, (1, reps))
+    return tiled[:, :height]
+
+
+def render_square_panels(
+    records: Sequence[dict],
     *,
     output_dir: Path,
     prefix: str,
     rng: random.Random,
-    tau_max: Optional[int] = None,
-    show_metadata: bool = False,
-    metadata_fields: Optional[Sequence[str]] = None,
-) -> None:
-    """Render and save episode cards."""
-
-    metadata_flag = show_metadata or bool(metadata_fields)
+    tau_max: Optional[int],
+    size: float,
+    dpi: int,
+) -> List[Dict[str, object]]:
+    """Render each record as a square CA unrolling."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    summary: List[Dict[str, object]] = []
     for idx, record in enumerate(records):
-        fig = show_episode_card(
+        history = space_time_from_record(
             record,
-            rng_seed=rng.randint(0, 2**31 - 1),
             tau_max=tau_max,
-            show_metadata=metadata_flag,
-            metadata_fields=metadata_fields,
+            rng_seed=rng.randint(0, 2**31 - 1),
         )
+        history = _square_history(history)
+        fig, ax = plt.subplots(figsize=(size, size), squeeze=True, dpi=dpi, facecolor=BG_COLOR)
+        ax.imshow(history, aspect="equal", interpolation="nearest", cmap=PALETTE)
+        ax.axis("off")
+        fig.subplots_adjust(0, 0, 1, 1)
+        metadata = record.get("meta") or {}
         fingerprint = (
-            record.get("meta", {}).get("fingerprint")
+            metadata.get("fingerprint")
             or record.get("fingerprint")
+            or record.get("id")
             or "record"
         )
-        suffix = str(fingerprint)[:10]
-        filename = f"{prefix}_{idx:02d}_{suffix}.png"
-        fig.savefig(output_dir / filename, dpi=200)
+        filename = f"{prefix}_{idx:02d}_{str(fingerprint)[:10]}.png"
+        filepath = output_dir / filename
+        fig.savefig(filepath, dpi=dpi)
         plt.close(fig)
+
+        summary.append(
+            {
+                "file": str(filepath),
+                "fingerprint": fingerprint,
+                "split": metadata.get("split") or record.get("split"),
+                "family": metadata.get("family"),
+                "alphabet_size": metadata.get("alphabet_size"),
+                "lambda": metadata.get("lambda"),
+                "lambda_bin": metadata.get("lambda_bin"),
+                "avg_cell_entropy": metadata.get("avg_cell_entropy"),
+                "radius": metadata.get("radius"),
+                "steps": metadata.get("steps"),
+                "window": metadata.get("window"),
+                "morphology": metadata.get("morphology"),
+            }
+        )
+    return summary
 
 
 def parse_args() -> argparse.Namespace:
@@ -75,7 +120,7 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         type=Path,
         required=True,
-        help="Directory to write the episode card images to.",
+        help="Directory to write the square CA images to.",
     )
     parser.add_argument(
         "--count",
@@ -145,15 +190,22 @@ def parse_args() -> argparse.Namespace:
         help="Maximum rollout depth passed to the renderer.",
     )
     parser.add_argument(
-        "--include-metadata",
-        action="store_true",
-        help="Render a metadata footer below each card.",
+        "--size",
+        type=float,
+        default=5.0,
+        help="Square figure size in inches (default: 5).",
     )
     parser.add_argument(
-        "--metadata-fields",
-        nargs="+",
+        "--dpi",
+        type=int,
+        default=240,
+        help="Output resolution (default: 240 dpi).",
+    )
+    parser.add_argument(
+        "--summary",
+        type=Path,
         default=None,
-        help="Explicit list of metadata keys to display in the footer.",
+        help="Optional path to write a JSON summary of generated panels.",
     )
     return parser.parse_args()
 
@@ -194,19 +246,25 @@ def main() -> None:
     if not filtered:
         raise ValueError("No records matched the provided filters.")
     if len(filtered) < len(records):
-        print(f"[plot_episode_cards] Filtered {len(filtered)} / {len(records)} episodes.", flush=True)
+        print(f"[ca_squares] Filtered {len(filtered)} / {len(records)} episodes.", flush=True)
 
     selected = list(select_records(filtered, args.count, rng))
-    prefix = args.prefix or args.input.stem
-    render_cards(
+    prefix = args.prefix or f"{args.input.stem}_square"
+    summary = render_square_panels(
         selected,
         output_dir=args.output_dir,
         prefix=prefix,
         rng=rng,
         tau_max=args.tau_max,
-        show_metadata=args.include_metadata,
-        metadata_fields=args.metadata_fields,
+        size=args.size,
+        dpi=args.dpi,
     )
+
+    if args.summary:
+        args.summary.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"count": len(summary), "records": summary}
+        with args.summary.open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
 
 
 if __name__ == "__main__":

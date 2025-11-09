@@ -23,8 +23,6 @@ except ImportError:  # pragma: no cover - fallback when hub is not installed
 Episode = Dict[str, object]
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
-_PROJECT_ROOT = _PACKAGE_DIR.parent
-
 _CELLARC_SPLIT_FILES: Dict[str, Dict[str, List[str]]] = {
     "train": {
         "jsonl": ["data/train.jsonl"],
@@ -57,14 +55,6 @@ _REMOTE_BENCHMARKS: Dict[str, Dict[str, object]] = {
             "test_interp": "test_interpolation",
             "test_extrap": "test_extrapolation",
         },
-        "fallbacks": (
-            "artifacts/hf_cellarc/hf-cellarc_100k",
-            "artifacts/datasets/cellarc_100k",
-        ),
-        "meta_fallbacks": (
-            "artifacts/hf_cellarc/hf-cellarc_100k_meta",
-            "artifacts/datasets/cellarc_100k_meta",
-        ),
     },
 }
 
@@ -168,9 +158,8 @@ def download_benchmark(
     allow_patterns / ignore_patterns:
         Optional filename patterns forwarded to ``snapshot_download``.
     
-    Existing local checkouts in ``root`` or the configured fallbacks (for
-    example, the repository's ``artifacts/hf_cellarc`` mirrors) short-circuit the
-    download step unless ``force_download`` is set.
+    Existing local checkouts in ``root`` short-circuit the download step unless
+    ``force_download`` is set.
 
     Returns
     -------
@@ -185,21 +174,12 @@ def download_benchmark(
     use_meta = include_metadata and config.get("meta_repo_id")
     repo_id = config["meta_repo_id" if use_meta else "repo_id"]
     local_dir_name = config["meta_dir" if use_meta else "local_dir"]
-    fallback_key = "meta_fallbacks" if use_meta else "fallbacks"
-    fallback_dirs: Sequence[str] = config.get(fallback_key, ())  # type: ignore[assignment]
-
     base_root = Path(root).expanduser() if root else _default_cache_dir()
     target_dir = base_root / local_dir_name
 
     if not force_download:
         if target_dir.exists():
             return target_dir
-        for candidate in fallback_dirs:
-            candidate_path = Path(candidate)
-            if not candidate_path.is_absolute():
-                candidate_path = (_PROJECT_ROOT / candidate_path).resolve()
-            if candidate_path.exists():
-                return candidate_path
 
     _require_snapshot_download()
 

@@ -5,17 +5,17 @@ from __future__ import annotations
 from matplotlib.colors import ListedColormap
 
 CMAP_HEX = [
-    "#252525",
-    "#0074D9",
-    "#FF4136",
-    "#37D449",
-    "#FFDC00",
-    "#E6E6E6",
-    "#F012BE",
-    "#FF871E",
-    "#54D2EB",
-    "#8D1D2C",
-    "#FFFFFF",
+    '#252525', # black
+    '#0074D9', # blue
+    '#FF4136', # red
+    '#37D449', #2ECC40', # green
+    '#FFDC00', # yellow
+    '#E6E6E6', # grey
+    '#F012BE', # pink
+    '#FF871E', # orange
+    '#54D2EB', #7FDBFF', # light blue
+    '#8D1D2C', #870C25', # brown
+    '#FFFFFF'
 ]
 
 BG_COLOR = "#EEEFF6"

@@ -1,0 +1,730 @@
+{
+  "description": "Summary statistics collected while exporting the dataset.",
+  "global": {
+    "alphabet_sizes": [
+      {
+        "count": 14334,
+        "value": 2
+      },
+      {
+        "count": 17548,
+        "value": 3
+      },
+      {
+        "count": 28317,
+        "value": 4
+      },
+      {
+        "count": 25094,
+        "value": 5
+      },
+      {
+        "count": 17707,
+        "value": 6
+      }
+    ],
+    "avg_cell_entropy": {
+      "count": 103000,
+      "max": 2.5793113373402923,
+      "mean": 1.1971311812603707,
+      "min": 0.0
+    },
+    "coverage_fraction": {
+      "count": 103000,
+      "max": 0.9375,
+      "mean": 0.3733179520256742,
+      "min": 0.06944444444444445
+    },
+    "episode_total_length": {
+      "count": 103000,
+      "max": 252,
+      "mean": 141.9033786407767,
+      "median": 156.0,
+      "min": 60
+    },
+    "families": [
+      {
+        "count": 793,
+        "value": "linear_mod_k"
+      },
+      {
+        "count": 19382,
+        "value": "outer_inner_totalistic"
+      },
+      {
+        "count": 19326,
+        "value": "outer_totalistic"
+      },
+      {
+        "count": 28109,
+        "value": "random"
+      },
+      {
+        "count": 10164,
+        "value": "threshold"
+      },
+      {
+        "count": 25226,
+        "value": "totalistic"
+      }
+    ],
+    "lambda": {
+      "count": 103000,
+      "max": 1.0,
+      "mean": 0.56326976642096,
+      "min": 0.015625
+    },
+    "num_episodes": 103000,
+    "radii": [
+      {
+        "count": 76310,
+        "value": 1
+      },
+      {
+        "count": 12423,
+        "value": 2
+      },
+      {
+        "count": 14267,
+        "value": 3
+      }
+    ],
+    "sample_length": {
+      "count": 515000,
+      "max": 21,
+      "mean": 11.825281553398058,
+      "median": 13.0,
+      "min": 5
+    },
+    "steps": [
+      {
+        "count": 97808,
+        "value": 1
+      },
+      {
+        "count": 5125,
+        "value": 2
+      },
+      {
+        "count": 67,
+        "value": 3
+      }
+    ],
+    "train_context": [
+      {
+        "count": 71118,
+        "value": 1
+      },
+      {
+        "count": 17548,
+        "value": 2
+      },
+      {
+        "count": 14334,
+        "value": 3
+      }
+    ],
+    "train_example_counts": [
+      {
+        "count": 103000,
+        "value": 5
+      }
+    ],
+    "window_sizes": [
+      {
+        "count": 71118,
+        "value": 3
+      },
+      {
+        "count": 17548,
+        "value": 5
+      },
+      {
+        "count": 14334,
+        "value": 7
+      }
+    ]
+  },
+  "splits": {
+    "test_extrapolation": {
+      "alphabet_sizes": [
+        {
+          "count": 72,
+          "value": 2
+        },
+        {
+          "count": 238,
+          "value": 3
+        },
+        {
+          "count": 183,
+          "value": 4
+        },
+        {
+          "count": 246,
+          "value": 5
+        },
+        {
+          "count": 261,
+          "value": 6
+        }
+      ],
+      "avg_cell_entropy": {
+        "count": 1000,
+        "max": 2.568267609284687,
+        "mean": 1.3025593158699509,
+        "min": 0.003687450625387197
+      },
+      "coverage_fraction": {
+        "count": 1000,
+        "max": 0.9375,
+        "mean": 0.1956163143004121,
+        "min": 0.06944444444444445
+      },
+      "episode_total_length": {
+        "count": 1000,
+        "max": 252,
+        "mean": 100.68,
+        "median": 84.0,
+        "min": 60
+      },
+      "families": [
+        {
+          "count": 10,
+          "value": "linear_mod_k"
+        },
+        {
+          "count": 219,
+          "value": "outer_inner_totalistic"
+        },
+        {
+          "count": 205,
+          "value": "outer_totalistic"
+        },
+        {
+          "count": 192,
+          "value": "random"
+        },
+        {
+          "count": 90,
+          "value": "threshold"
+        },
+        {
+          "count": 284,
+          "value": "totalistic"
+        }
+      ],
+      "lambda": {
+        "count": 1000,
+        "max": 1.0,
+        "mean": 0.5823170205761313,
+        "min": 0.046875
+      },
+      "num_episodes": 1000,
+      "radii": [
+        {
+          "count": 752,
+          "value": 1
+        },
+        {
+          "count": 177,
+          "value": 2
+        },
+        {
+          "count": 71,
+          "value": 3
+        }
+      ],
+      "sample_length": {
+        "count": 5000,
+        "max": 21,
+        "mean": 8.39,
+        "median": 7.0,
+        "min": 5
+      },
+      "steps": [
+        {
+          "count": 938,
+          "value": 1
+        },
+        {
+          "count": 61,
+          "value": 2
+        },
+        {
+          "count": 1,
+          "value": 3
+        }
+      ],
+      "train_context": [
+        {
+          "count": 690,
+          "value": 1
+        },
+        {
+          "count": 238,
+          "value": 2
+        },
+        {
+          "count": 72,
+          "value": 3
+        }
+      ],
+      "train_example_counts": [
+        {
+          "count": 1000,
+          "value": 5
+        }
+      ],
+      "window_sizes": [
+        {
+          "count": 690,
+          "value": 3
+        },
+        {
+          "count": 238,
+          "value": 5
+        },
+        {
+          "count": 72,
+          "value": 7
+        }
+      ]
+    },
+    "test_interpolation": {
+      "alphabet_sizes": [
+        {
+          "count": 156,
+          "value": 2
+        },
+        {
+          "count": 182,
+          "value": 3
+        },
+        {
+          "count": 269,
+          "value": 4
+        },
+        {
+          "count": 237,
+          "value": 5
+        },
+        {
+          "count": 156,
+          "value": 6
+        }
+      ],
+      "avg_cell_entropy": {
+        "count": 1000,
+        "max": 2.516942075157613,
+        "mean": 1.145286175489203,
+        "min": 0.011060878531861442
+      },
+      "coverage_fraction": {
+        "count": 1000,
+        "max": 0.9375,
+        "mean": 0.3717573070987663,
+        "min": 0.06944444444444445
+      },
+      "episode_total_length": {
+        "count": 1000,
+        "max": 252,
+        "mean": 142.392,
+        "median": 156.0,
+        "min": 60
+      },
+      "families": [
+        {
+          "count": 7,
+          "value": "linear_mod_k"
+        },
+        {
+          "count": 183,
+          "value": "outer_inner_totalistic"
+        },
+        {
+          "count": 186,
+          "value": "outer_totalistic"
+        },
+        {
+          "count": 304,
+          "value": "random"
+        },
+        {
+          "count": 117,
+          "value": "threshold"
+        },
+        {
+          "count": 203,
+          "value": "totalistic"
+        }
+      ],
+      "lambda": {
+        "count": 1000,
+        "max": 1.0,
+        "mean": 0.5490925511831278,
+        "min": 0.10185185185185185
+      },
+      "num_episodes": 1000,
+      "radii": [
+        {
+          "count": 721,
+          "value": 1
+        },
+        {
+          "count": 125,
+          "value": 2
+        },
+        {
+          "count": 154,
+          "value": 3
+        }
+      ],
+      "sample_length": {
+        "count": 5000,
+        "max": 21,
+        "mean": 11.866,
+        "median": 13.0,
+        "min": 5
+      },
+      "steps": [
+        {
+          "count": 941,
+          "value": 1
+        },
+        {
+          "count": 57,
+          "value": 2
+        },
+        {
+          "count": 2,
+          "value": 3
+        }
+      ],
+      "train_context": [
+        {
+          "count": 662,
+          "value": 1
+        },
+        {
+          "count": 182,
+          "value": 2
+        },
+        {
+          "count": 156,
+          "value": 3
+        }
+      ],
+      "train_example_counts": [
+        {
+          "count": 1000,
+          "value": 5
+        }
+      ],
+      "window_sizes": [
+        {
+          "count": 662,
+          "value": 3
+        },
+        {
+          "count": 182,
+          "value": 5
+        },
+        {
+          "count": 156,
+          "value": 7
+        }
+      ]
+    },
+    "train": {
+      "alphabet_sizes": [
+        {
+          "count": 13968,
+          "value": 2
+        },
+        {
+          "count": 16948,
+          "value": 3
+        },
+        {
+          "count": 27585,
+          "value": 4
+        },
+        {
+          "count": 24389,
+          "value": 5
+        },
+        {
+          "count": 17110,
+          "value": 6
+        }
+      ],
+      "avg_cell_entropy": {
+        "count": 100000,
+        "max": 2.5793113373402923,
+        "mean": 1.1967362677265423,
+        "min": 0.0
+      },
+      "coverage_fraction": {
+        "count": 100000,
+        "max": 0.9375,
+        "mean": 0.3751607925154553,
+        "min": 0.06944444444444445
+      },
+      "episode_total_length": {
+        "count": 100000,
+        "max": 252,
+        "mean": 142.31016,
+        "median": 156.0,
+        "min": 60
+      },
+      "families": [
+        {
+          "count": 770,
+          "value": "linear_mod_k"
+        },
+        {
+          "count": 18792,
+          "value": "outer_inner_totalistic"
+        },
+        {
+          "count": 18740,
+          "value": "outer_totalistic"
+        },
+        {
+          "count": 27341,
+          "value": "random"
+        },
+        {
+          "count": 9866,
+          "value": "threshold"
+        },
+        {
+          "count": 24491,
+          "value": "totalistic"
+        }
+      ],
+      "lambda": {
+        "count": 100000,
+        "max": 1.0,
+        "mean": 0.5632730087654387,
+        "min": 0.015625
+      },
+      "num_episodes": 100000,
+      "radii": [
+        {
+          "count": 74106,
+          "value": 1
+        },
+        {
+          "count": 11989,
+          "value": 2
+        },
+        {
+          "count": 13905,
+          "value": 3
+        }
+      ],
+      "sample_length": {
+        "count": 500000,
+        "max": 21,
+        "mean": 11.85918,
+        "median": 13.0,
+        "min": 5
+      },
+      "steps": [
+        {
+          "count": 94978,
+          "value": 1
+        },
+        {
+          "count": 4959,
+          "value": 2
+        },
+        {
+          "count": 63,
+          "value": 3
+        }
+      ],
+      "train_context": [
+        {
+          "count": 69084,
+          "value": 1
+        },
+        {
+          "count": 16948,
+          "value": 2
+        },
+        {
+          "count": 13968,
+          "value": 3
+        }
+      ],
+      "train_example_counts": [
+        {
+          "count": 100000,
+          "value": 5
+        }
+      ],
+      "window_sizes": [
+        {
+          "count": 69084,
+          "value": 3
+        },
+        {
+          "count": 16948,
+          "value": 5
+        },
+        {
+          "count": 13968,
+          "value": 7
+        }
+      ]
+    },
+    "val": {
+      "alphabet_sizes": [
+        {
+          "count": 138,
+          "value": 2
+        },
+        {
+          "count": 180,
+          "value": 3
+        },
+        {
+          "count": 280,
+          "value": 4
+        },
+        {
+          "count": 222,
+          "value": 5
+        },
+        {
+          "count": 180,
+          "value": 6
+        }
+      ],
+      "avg_cell_entropy": {
+        "count": 1000,
+        "max": 2.5589169730895684,
+        "mean": 1.1830394058047846,
+        "min": 0.007374901250774395
+      },
+      "coverage_fraction": {
+        "count": 1000,
+        "max": 0.9375,
+        "mean": 0.3682961856995891,
+        "min": 0.06944444444444445
+      },
+      "episode_total_length": {
+        "count": 1000,
+        "max": 252,
+        "mean": 141.96,
+        "median": 156.0,
+        "min": 60
+      },
+      "families": [
+        {
+          "count": 6,
+          "value": "linear_mod_k"
+        },
+        {
+          "count": 188,
+          "value": "outer_inner_totalistic"
+        },
+        {
+          "count": 195,
+          "value": "outer_totalistic"
+        },
+        {
+          "count": 272,
+          "value": "random"
+        },
+        {
+          "count": 91,
+          "value": "threshold"
+        },
+        {
+          "count": 248,
+          "value": "totalistic"
+        }
+      ],
+      "lambda": {
+        "count": 1000,
+        "max": 1.0,
+        "mean": 0.558075493055556,
+        "min": 0.0625
+      },
+      "num_episodes": 1000,
+      "radii": [
+        {
+          "count": 731,
+          "value": 1
+        },
+        {
+          "count": 132,
+          "value": 2
+        },
+        {
+          "count": 137,
+          "value": 3
+        }
+      ],
+      "sample_length": {
+        "count": 5000,
+        "max": 21,
+        "mean": 11.83,
+        "median": 13.0,
+        "min": 5
+      },
+      "steps": [
+        {
+          "count": 951,
+          "value": 1
+        },
+        {
+          "count": 48,
+          "value": 2
+        },
+        {
+          "count": 1,
+          "value": 3
+        }
+      ],
+      "train_context": [
+        {
+          "count": 682,
+          "value": 1
+        },
+        {
+          "count": 180,
+          "value": 2
+        },
+        {
+          "count": 138,
+          "value": 3
+        }
+      ],
+      "train_example_counts": [
+        {
+          "count": 1000,
+          "value": 5
+        }
+      ],
+      "window_sizes": [
+        {
+          "count": 682,
+          "value": 3
+        },
+        {
+          "count": 180,
+          "value": 5
+        },
+        {
+          "count": 138,
+          "value": 7
+        }
+      ]
+    }
+  }
+}
