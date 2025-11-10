@@ -10,7 +10,7 @@ import sys
 import os
 from pathlib import Path
 
-CACHE_HOME = Path(os.getenv("CELLARC_HOME", Path.home() / ".cache" / "cell_arc"))
+CACHE_HOME = Path(os.getenv("CELLARC_HOME", Path.home() / ".cache" / "cellarc"))
 EXPORT_ROOT = CACHE_HOME / "exports"
 
 

@@ -28,17 +28,33 @@ _CELLARC_SPLIT_FILES: Dict[str, Dict[str, List[str]]] = {
         "jsonl": ["data/train.jsonl"],
         "parquet": ["data/train.parquet"],
     },
+    "train_100": {
+        "jsonl": ["data/train_100.jsonl"],
+        "parquet": ["data/train_100.parquet"],
+    },
     "val": {
         "jsonl": ["data/val.jsonl"],
         "parquet": ["data/val.parquet"],
+    },
+    "val_100": {
+        "jsonl": ["data/val_100.jsonl"],
+        "parquet": ["data/val_100.parquet"],
     },
     "test_interpolation": {
         "jsonl": ["data/test_interpolation.jsonl"],
         "parquet": ["data/test_interpolation.parquet"],
     },
+    "test_interpolation_100": {
+        "jsonl": ["data/test_interpolation_100.jsonl"],
+        "parquet": ["data/test_interpolation_100.parquet"],
+    },
     "test_extrapolation": {
         "jsonl": ["data/test_extrapolation.jsonl"],
         "parquet": ["data/test_extrapolation.parquet"],
+    },
+    "test_extrapolation_100": {
+        "jsonl": ["data/test_extrapolation_100.jsonl"],
+        "parquet": ["data/test_extrapolation_100.parquet"],
     },
 }
 
@@ -54,6 +70,17 @@ _REMOTE_BENCHMARKS: Dict[str, Dict[str, object]] = {
             "test": "test_interpolation",
             "test_interp": "test_interpolation",
             "test_extrap": "test_extrapolation",
+            # convenient subset aliases
+            "train100": "train_100",
+            "val100": "val_100",
+            "test_interpolation_100": "test_interpolation_100",
+            "test_interpolation100": "test_interpolation_100",
+            "test_interp_100": "test_interpolation_100",
+            "test_interp100": "test_interpolation_100",
+            "test_extrapolation_100": "test_extrapolation_100",
+            "test_extrapolation100": "test_extrapolation_100",
+            "test_extrap_100": "test_extrapolation_100",
+            "test_extrap100": "test_extrapolation_100",
         },
     },
 }
@@ -63,7 +90,7 @@ def _default_cache_dir() -> Path:
     override = os.getenv("CELLARC_HOME")
     if override:
         return Path(override).expanduser()
-    return Path.home() / ".cache" / "cell_arc"
+    return Path.home() / ".cache" / "cellarc"
 
 
 def _resolve_split_spec(name: str, split: str) -> Dict[str, List[str]]:
@@ -147,7 +174,7 @@ def download_benchmark(
         supervision-only dataset is retrieved instead.
     root:
         Directory where the snapshot should be materialised. Defaults to
-        ``CELLARC_HOME`` or ``~/.cache/cell_arc``.
+        ``CELLARC_HOME`` or ``~/.cache/cellarc``.
     force_download:
         If ``True`` redownload all files even if they are present locally.
     revision / meta_revision:

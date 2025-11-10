@@ -12,16 +12,16 @@ dependencies = [
     "numpy",
     "matplotlib",
     "tqdm",
+    "pyarrow",
+    "huggingface_hub>=0.18",
+    "datasets>=2.14",
 ]
 
 [project.optional-dependencies]
 all = [
     "cax",
-    "datasets>=2.14",
     "flax",
-    "huggingface_hub>=0.18",
     "jax",
-    "pyarrow",
 ]
 dev = [
     "pytest",

@@ -15,7 +15,7 @@ from cellarc import download_benchmark
 
 OUTPUT_PATH = Path("artifacts") / "dataset_stats" / "dataset_metadata_long.csv"
 SUMMARY_PATH = Path("artifacts") / "dataset_stats" / "dataset_metadata_summary.csv"
-DEFAULT_CACHE_HOME = Path(os.getenv("CELLARC_HOME", Path.home() / ".cache" / "cell_arc"))
+DEFAULT_CACHE_HOME = Path(os.getenv("CELLARC_HOME", Path.home() / ".cache" / "cellarc"))
 DEFAULT_DATASET_ROOT = DEFAULT_CACHE_HOME / "hf-cellarc_100k_meta" / "data"
 SPLIT_ORDER = ["train", "val", "test_interpolation", "test_extrapolation"]
 
@@ -291,7 +291,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Directory containing split JSONL files. Defaults to the Hugging Face cache "
-        "(~/.cache/cell_arc/hf-cellarc_100k_meta/data).",
+        "(~/.cache/cellarc/hf-cellarc_100k_meta/data).",
     )
     parser.add_argument(
         "--output",

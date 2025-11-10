@@ -1,4 +1,4 @@
-"""Visualization utilities for the cell_arc project."""
+"""Visualization utilities for the cellarc project."""
 
 from cellarc.visualization.episode_cards import (
     runner_from_record,

@@ -1,8 +1,10 @@
 # cellarc
 
-Utilities for generating, analysing, and visualising few-shot cellular automata
-episodes. The package ships with light-weight dataset tooling by default and
-keeps the heavier simulation stack behind an optional extra.
+This repository contains dataset generation pipeline for CellARC:
+- Model training and baselines: https://github.com/mireklzicar/cellarc 
+- Website: https://cellarc.mireklzicar.com/
+
+![](assets/ca_demo.png)
 
 ## Installation
 
@@ -18,7 +20,7 @@ pip install cellarc[all]
 ```
 
 Dataset snapshots are fetched directly from the Hugging Face Hub and cached in
-`~/.cache/cell_arc` (override with the `CELLARC_HOME` environment variable).
+`~/.cache/cellarc` (override with the `CELLARC_HOME` environment variable).
 There are no repository fallbacks; if a download fails, the loader raises an
 error so the issue can be fixed explicitly.
 
@@ -51,6 +53,25 @@ The available remote splits are `train`, `val`, `test_interpolation`, and
 `test_extrapolation`. Each split is stored as `data/<split>.jsonl` (the default
 loader) and `data/<split>.parquet`; set `fmt="parquet"` when using
 `datasets`/`pyarrow` for faster IO.
+
+### Quick 100-episode subsets
+
+For faster iteration, the dataset repositories provide fixed 100-episode
+subsets for every split: `train_100`, `val_100`, `test_interpolation_100`, and
+`test_extrapolation_100`. You can access them via the same loader API:
+
+```python
+from cellarc import EpisodeDataset
+
+# Load the 100-episode training subset (with metadata merged in).
+train_small = EpisodeDataset.from_huggingface("train_100", include_metadata=True)
+print(len(train_small))  # -> 100
+
+# Iterate or batch as usual…
+for episode in train_small:
+    print(episode["id"])  # first few IDs
+    break
+```
 
 ### Refreshing the cache
 

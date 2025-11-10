@@ -30,7 +30,7 @@ from datasets import Features, Sequence, Value
 
 
 SPLITS: Tuple[str, ...] = ("train", "val", "test_interpolation", "test_extrapolation")
-DEFAULT_EXPORT_ROOT = Path(os.getenv("CELLARC_HOME", Path.home() / ".cache" / "cell_arc")) / "exports"
+DEFAULT_EXPORT_ROOT = Path(os.getenv("CELLARC_HOME", Path.home() / ".cache" / "cellarc")) / "exports"
 
 
 def parse_args() -> argparse.Namespace:
@@ -46,7 +46,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_EXPORT_ROOT,
         help="Root directory for the generated Hugging Face packages "
-        "(defaults to ${CELLARC_HOME:-~/.cache/cell_arc}/exports).",
+        "(defaults to ${CELLARC_HOME:-~/.cache/cellarc}/exports).",
     )
     parser.add_argument(
         "--dataset-name",

@@ -2,7 +2,7 @@
 
 This document is the authoritative record for reproducing the datasets that ship on
 the Hugging Face Hub (`mireklzicar/cellarc_100k(_meta)`). Local exports are staged
-under `${CELLARC_HOME:-~/.cache/cell_arc}/exports`, which mirrors the Hub layout
+under `${CELLARC_HOME:-~/.cache/cellarc}/exports`, which mirrors the Hub layout
 and can be synced with `huggingface_hub`. All commands are meant to run from the
 repository root with Python 3.11 and the dependencies listed in
 `requirements.txt`.
@@ -11,9 +11,9 @@ The current release contains **103 000** enriched cellular automaton (CA)
 episodes (train 100 000, validation 1 000, test_interpolation 1 000,
 test_extrapolation 1 000). You can verify the final artefacts via:
 
-- `${CELLARC_HOME:-~/.cache/cell_arc}/exports/cellarc_100k_meta/data_files.json`
+- `${CELLARC_HOME:-~/.cache/cellarc}/exports/cellarc_100k_meta/data_files.json`
   – split sizes and byte counts.
-- `${CELLARC_HOME:-~/.cache/cell_arc}/exports/cellarc_100k_meta/dataset_stats.json`
+- `${CELLARC_HOME:-~/.cache/cellarc}/exports/cellarc_100k_meta/dataset_stats.json`
   – aggregate metrics. Notably, `test_extrapolation` has the **lowest**
   `coverage_fraction` (approx. 0.196), the **highest** Langton lambda (approx.
   0.582) and entropy (approx. 1.30), matching the intended extrapolation regime.
@@ -43,7 +43,7 @@ python scripts/resample_highcov.py ...
 python scripts/split_pool.py ...
 
 # 9. Packaging
-python scripts/build_hf_dataset.py ...                             # writes ${CELLARC_HOME:-~/.cache/cell_arc}/exports/*
+python scripts/build_hf_dataset.py ...                             # writes ${CELLARC_HOME:-~/.cache/cellarc}/exports/*
 python scripts/build_hf_dataset.py --target-root artifacts/hf_cellarc ...
 ``` 
 
@@ -210,14 +210,14 @@ Any leftovers beyond the requested split sizes are written to `unused.jsonl` for
 ## 9. Packaging -- `scripts/build_hf_dataset.py`
 
 We run the exporter twice: once for the local
-`${CELLARC_HOME:-~/.cache/cell_arc}/exports/*` tree (used internally) and once
+`${CELLARC_HOME:-~/.cache/cellarc}/exports/*` tree (used internally) and once
 for the staging tree we sync with the Hugging Face Hub.
 
 ```bash
 # Local artefacts used throughout the repo
 python scripts/build_hf_dataset.py \
   --source-dir artifacts/processing/resampled_highcov/splits \
-  --target-root "${CELLARC_HOME:-~/.cache/cell_arc}/exports" \
+  --target-root "${CELLARC_HOME:-~/.cache/cellarc}/exports" \
   --dataset-name cellarc_100k \
   --extended-suffix _meta \
   --chunk-size 1000 \
@@ -245,11 +245,11 @@ Each invocation emits **two** directories:
 
 After packaging, double-check:
 
-1. `${CELLARC_HOME:-~/.cache/cell_arc}/exports/cellarc_100k_meta/data_files.json`
+1. `${CELLARC_HOME:-~/.cache/cellarc}/exports/cellarc_100k_meta/data_files.json`
    - train: 100 000 records, JSONL size approx. 288 MB.
    - val/test_interpolation/test_extrapolation: 1 000 records each.
 
-2. `${CELLARC_HOME:-~/.cache/cell_arc}/exports/cellarc_100k_meta/dataset_stats.json`
+2. `${CELLARC_HOME:-~/.cache/cellarc}/exports/cellarc_100k_meta/dataset_stats.json`
    - Global lambda mean approx. 0.563 (min 0.0156, max 1.0).
    - Coverage fraction mean approx. 0.373 (min 0.069, max 0.938).
    - Train sample length mean approx. 11.83 with exactly five training examples per episode.
@@ -286,6 +286,6 @@ Everything else listed above is required for reproduction. Removing or renaming 
 ---
 
 By following the commands and verification steps in this document you can recreate
-the export tree under `${CELLARC_HOME:-~/.cache/cell_arc}/exports` and the mirror
+the export tree under `${CELLARC_HOME:-~/.cache/cellarc}/exports` and the mirror
 in `artifacts/hf_cellarc`, matching the statistics recorded alongside the
 release.

@@ -1,4 +1,4 @@
-"""cell_arc package: tools for generating and solving few-shot cellular automata tasks."""
+"""cellarc package: tools for generating and solving few-shot cellular automata tasks."""
 
 from importlib import import_module
 from typing import Any, Dict, List
