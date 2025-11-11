@@ -13,26 +13,24 @@ from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 
+_RUNNING_UNDER_PYTEST = "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST")
+_GENERATION_EXTRA_MESSAGE = (
+    "cellarc generation helpers require the `cax` dependency, which only ships "
+    "wheels for Python 3.11+. Install with `pip install cellarc[all]` from a "
+    "Python 3.11+ environment."
+)
+
 try:
-    from cellarc.generation import sample_task
+    import cax  # type: ignore  # noqa: F401
 except ModuleNotFoundError as exc:
-    sample_task = None
-    _GEN_IMPORT_ERROR = exc
-else:
-    _GEN_IMPORT_ERROR = None
-
-from cellarc.visualization import show_episode_card
-
-if sample_task is None:
-    reason = (
-        "cellarc.generation extras require `cax` (available on Python 3.11+). "
-        "Install with `pip install cellarc[all]` from a Python 3.11+ environment."
-    )
-    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
+    if _RUNNING_UNDER_PYTEST:
         import pytest
 
-        pytest.skip(reason, allow_module_level=True)
-    raise ModuleNotFoundError(reason) from _GEN_IMPORT_ERROR
+        pytest.skip(_GENERATION_EXTRA_MESSAGE, allow_module_level=True)
+    raise ModuleNotFoundError(_GENERATION_EXTRA_MESSAGE) from exc
+
+from cellarc.generation import sample_task
+from cellarc.visualization import show_episode_card
 
 
 def parse_args() -> argparse.Namespace:
