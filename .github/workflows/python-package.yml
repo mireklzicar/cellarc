@@ -32,11 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if python - <<'PY'
-import sys
-raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)
-PY
-          then
+          if python -c "import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 11) else 1)"; then
             pip install -e ".[dev,all]"
           else
             pip install -e ".[dev]"
