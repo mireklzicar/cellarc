@@ -5,14 +5,34 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
+import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 
-from cellarc.generation import sample_task
+try:
+    from cellarc.generation import sample_task
+except ModuleNotFoundError as exc:
+    sample_task = None
+    _GEN_IMPORT_ERROR = exc
+else:
+    _GEN_IMPORT_ERROR = None
+
 from cellarc.visualization import show_episode_card
+
+if sample_task is None:
+    reason = (
+        "cellarc.generation extras require `cax` (available on Python 3.11+). "
+        "Install with `pip install cellarc[all]` from a Python 3.11+ environment."
+    )
+    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
+        import pytest
+
+        pytest.skip(reason, allow_module_level=True)
+    raise ModuleNotFoundError(reason) from _GEN_IMPORT_ERROR
 
 
 def parse_args() -> argparse.Namespace:
