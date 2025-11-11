@@ -6,7 +6,7 @@ tqdm
 # Optional extras used by generation and solver tooling (`pip install cellarc[all]`)
 jax
 flax
-cax
+cax; python_version >= "3.11"
 datasets
 huggingface_hub
 pyarrow

@@ -19,6 +19,11 @@ dataset synthesis) install the full extra:
 pip install cellarc[all]
 ```
 
+> **Python 3.11+ required:** The `cax` package only publishes wheels for Python
+> 3.11 and newer, so `cellarc[all]` (and any extra that pulls in `cax`) must be
+> installed from a 3.11+ interpreter. On older Python releases the base package
+> still works, but the CA generation helpers remain unavailable.
+
 Dataset snapshots are fetched directly from the Hugging Face Hub and cached in
 `~/.cache/cellarc` (override with the `CELLARC_HOME` environment variable).
 There are no repository fallbacks; if a download fails, the loader raises an
@@ -222,6 +227,10 @@ Install development dependencies with the `dev` extra:
 ```bash
 pip install -e ".[dev,all]"
 ```
+
+Because the development install also pulls in `cax`, run the above from Python
+3.11+ to ensure the simulator dependencies resolve correctly. Use `pip install
+-e ".[dev]"` on older interpreters if you only need the core test/tooling stack.
 
 If you have unrelated pytest plugins installed globally, disable auto-loading to
 match the CI environment:

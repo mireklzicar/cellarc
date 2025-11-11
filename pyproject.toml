@@ -37,7 +37,7 @@ dependencies = [
 
 [project.optional-dependencies]
 all = [
-    "cax",
+    "cax; python_version >= '3.11'",
     "flax",
     "jax",
 ]
@@ -46,6 +46,7 @@ dev = [
     "black",
     "flake8",
     "bump2version",
+    "cax; python_version >= '3.11'",
 ]
 
 [project.urls]
