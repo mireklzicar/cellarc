@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 import numpy as np
 
-from eval.common import EpisodeRecord
+from cellarc.eval import EpisodeRecord
 from cellarc.generation.cax_runner import AutomatonRunner
 from cellarc.generation.reconstruction import (
     infer_dataset_config,

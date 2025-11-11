@@ -23,7 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:  # pragma: no cover
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from cellarc import EpisodeDataset, random_palette_mapping
-from eval.common import EpisodeRecord
+from cellarc.eval import EpisodeRecord
 from cellarc.generation.serialization import deserialize_rule_table, serialize_rule_table
 from cellarc.generation.reconstruction import (
     infer_dataset_config,

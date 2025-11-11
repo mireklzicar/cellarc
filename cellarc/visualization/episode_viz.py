@@ -17,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:  # pragma: no cover
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from eval.common import prepare_episode, load_records, EpisodeRecord
+from cellarc.eval import prepare_episode, load_records, EpisodeRecord
 from cellarc.visualization.ca_rollout_viz import _ensure_rule_table
 from cellarc.visualization.palette import BG_COLOR, CMAP_HEX, PALETTE
 

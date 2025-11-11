@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:  # pragma: no cover
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from eval.common import EpisodeRecord, load_records
+from cellarc.eval import EpisodeRecord, load_records
 from cellarc.signatures import Signature, compute_signature, signatures_as_rows
 
 try:  # optional dependency for parquet IO

@@ -3,6 +3,7 @@
 from importlib import import_module
 from typing import Any, Dict, List
 
+from ._version import __version__
 from .data import (
     EpisodeDataLoader,
     EpisodeDataset,
@@ -16,8 +17,6 @@ from .data import (
 from .signatures import batch_signatures, compute_signature, signatures_as_rows
 from .solver import LearnedLocalMap, learn_from_record, learn_local_map_from_pairs
 from .utils import choose_r_t_for_W, de_bruijn_cycle, window_size
-
-__version__ = "0.1.0"
 
 _OPTIONAL_EXPORTS: Dict[str, tuple[str, str]] = {
     "generate_dataset_jsonl": ("cellarc.generation.dataset", "generate_dataset_jsonl"),
@@ -44,6 +43,7 @@ __all__ = [
     "compute_signature",
     "batch_signatures",
     "signatures_as_rows",
+    "__version__",
 ]
 
 
