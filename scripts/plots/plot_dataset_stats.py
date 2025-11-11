@@ -512,6 +512,214 @@ def plot_query_window_coverage_boxplot(df: pd.DataFrame, output_dir: Path) -> Pa
     return output_path
 
 
+def plot_entropy_violin(df: pd.DataFrame, output_dir: Path) -> Path:
+    """Violin plot of average cell entropy per split.
+
+    Uses split colors and larger font scale similar to the family mix figure.
+    """
+    column = "avg_cell_entropy"
+    split_data: List[np.ndarray] = []
+    tick_labels: List[str] = []
+    colors: List[str] = []
+    for split in SPLIT_ORDER:
+        values = df.loc[df["split"] == split, column].dropna().to_numpy()
+        if values.size == 0:
+            continue
+        split_data.append(values)
+        tick_labels.append(_format_split_label(split))
+        colors.append(SPLIT_COLORS.get(split, "#4C72B0"))
+    if not split_data:
+        raise RuntimeError("No cell entropy data available for violin plot.")
+
+    output_path = output_dir / "cell_entropy_violin.png"
+
+    base_font = float(plt.rcParams.get("font.size", 10.0))
+    rc_overrides = {"font.size": base_font * PER_SPLIT_FONT_SCALE}
+    with plt.rc_context(rc_overrides):
+        fig, ax = plt.subplots(figsize=(8.6, 5.4))
+        vp = ax.violinplot(
+            split_data,
+            showmeans=False,
+            showmedians=False,
+            showextrema=False,
+            widths=0.6,
+        )
+        for body, color in zip(vp["bodies"], colors):
+            body.set_facecolor(color)
+            body.set_edgecolor(color)
+            body.set_alpha(0.55)
+
+        medians = [np.median(values) for values in split_data]
+        positions = np.arange(1, len(split_data) + 1)
+        ax.plot(positions, medians, color="#222222", linewidth=1.2, marker="o", markersize=4, zorder=3)
+
+        ax.set_xticks(positions)
+        ax.set_xticklabels(tick_labels)
+        ax.set_ylabel("Average cell entropy")
+        # Dynamic y-limits with a small margin
+        all_values = np.concatenate(split_data)
+        ymin, ymax = float(np.min(all_values)), float(np.max(all_values))
+        if np.isfinite(ymin) and np.isfinite(ymax):
+            rng = max(ymax - ymin, 1e-6)
+            margin = rng * 0.05
+            ax.set_ylim(ymin - margin, ymax + margin)
+        ax.set_title("Cell entropy per split (violin)")
+        ax.grid(axis="y", alpha=0.25, linestyle="--", linewidth=0.8)
+        fig.tight_layout()
+        fig.savefig(output_path)
+        plt.close(fig)
+    return output_path
+
+
+def plot_query_window_coverage_violin(df: pd.DataFrame, output_dir: Path) -> Path:
+    """Violin plot of query_window_coverage_weighted per split.
+
+    Styled with larger fonts similar to the family mix figure, and colored
+    by split using SPLIT_COLORS for visual consistency across plots.
+    """
+    column = "query_window_coverage_weighted"
+    split_data: List[np.ndarray] = []
+    tick_labels: List[str] = []
+    colors: List[str] = []
+    for split in SPLIT_ORDER:
+        values = df.loc[df["split"] == split, column].dropna().to_numpy()
+        if values.size == 0:
+            continue
+        split_data.append(values)
+        tick_labels.append(_format_split_label(split))
+        colors.append(SPLIT_COLORS.get(split, "#4C72B0"))
+    if not split_data:
+        raise RuntimeError("No query window coverage data available for violin plot.")
+
+    output_path = output_dir / "query_window_coverage_violin.png"
+
+    # Match the larger font scale used in the family mix figure
+    base_font = float(plt.rcParams.get("font.size", 10.0))
+    rc_overrides = {"font.size": base_font * PER_SPLIT_FONT_SCALE}
+    with plt.rc_context(rc_overrides):
+        fig, ax = plt.subplots(figsize=(8.6, 5.4))
+        vp = ax.violinplot(
+            split_data,
+            showmeans=False,
+            showmedians=False,
+            showextrema=False,
+            widths=0.6,
+        )
+        # Color each violin according to the split color
+        for body, color in zip(vp["bodies"], colors):
+            body.set_facecolor(color)
+            body.set_edgecolor(color)
+            body.set_alpha(0.55)
+
+        # Overlay medians as points and a thin line for clarity
+        medians = [np.median(values) for values in split_data]
+        positions = np.arange(1, len(split_data) + 1)
+        ax.plot(positions, medians, color="#222222", linewidth=1.2, marker="o", markersize=4, zorder=3)
+
+        ax.set_xticks(positions)
+        ax.set_xticklabels(tick_labels)
+        ax.set_ylabel("Query window coverage (weighted)")
+        coverage_max = max(float(values.max()) for values in split_data)
+        upper = min(1.0, coverage_max + 0.03)
+        ax.set_ylim(0.5, upper)
+        ax.set_title("Query window coverage per split (violin)")
+        ax.grid(axis="y", alpha=0.25, linestyle="--", linewidth=0.8)
+        fig.tight_layout()
+        fig.savefig(output_path)
+        plt.close(fig)
+    return output_path
+
+
+def plot_lambda_entropy_coverage_violin_joint(df: pd.DataFrame, output_dir: Path) -> Path:
+    """Joint violin plot with λ, entropy, and query coverage side-by-side.
+
+    - Uses split colors (`SPLIT_COLORS`) for each violin body
+    - Larger font scale similar to the family mix figure
+    - Medians overlaid as small points and thin line
+    - No y-axis labels to keep the layout clean, titles per panel
+    """
+
+    def _collect(column: str):
+        data: List[np.ndarray] = []
+        ticks: List[str] = []
+        cols: List[str] = []
+        for split in SPLIT_ORDER:
+            values = df.loc[df["split"] == split, column].dropna().to_numpy()
+            if values.size == 0:
+                continue
+            data.append(values)
+            ticks.append(_format_split_label(split))
+            cols.append(SPLIT_COLORS.get(split, "#4C72B0"))
+        if not data:
+            raise RuntimeError(f"No data for metric: {column}")
+        return data, ticks, cols
+
+    cov_data, cov_ticks, cov_colors = _collect("query_window_coverage_weighted")
+    ent_data, ent_ticks, ent_colors = _collect("avg_cell_entropy")
+    lam_data, lam_ticks, lam_colors = _collect("lambda")
+
+    output_path = output_dir / "lambda_entropy_coverage_violin_joint.png"
+
+    base_font = float(plt.rcParams.get("font.size", 10.0))
+    rc_overrides = {"font.size": base_font * PER_SPLIT_FONT_SCALE}
+    with plt.rc_context(rc_overrides):
+        fig, axes = plt.subplots(1, 3, figsize=(16.2, 5.4), sharex=False)
+
+        def _draw(
+            ax: plt.Axes,
+            split_data: List[np.ndarray],
+            tick_labels: List[str],
+            colors: List[str],
+            title: str,
+            ylim: Optional[tuple] = None,
+        ):
+            vp = ax.violinplot(
+                split_data,
+                showmeans=False,
+                showmedians=False,
+                showextrema=False,
+                widths=0.6,
+            )
+            for body, color in zip(vp["bodies"], colors):
+                body.set_facecolor(color)
+                body.set_edgecolor(color)
+                body.set_alpha(0.55)
+            medians = [np.median(values) for values in split_data]
+            positions = np.arange(1, len(split_data) + 1)
+            ax.plot(positions, medians, color="#222222", linewidth=1.2, marker="o", markersize=4, zorder=3)
+            ax.set_xticks(positions)
+            ax.set_xticklabels(tick_labels)
+            ax.set_ylabel("")  # intentionally blank for clean layout
+            if ylim is not None:
+                ax.set_ylim(*ylim)
+            else:
+                all_values = np.concatenate(split_data)
+                ymin, ymax = float(np.min(all_values)), float(np.max(all_values))
+                if np.isfinite(ymin) and np.isfinite(ymax):
+                    rng = max(ymax - ymin, 1e-6)
+                    margin = rng * 0.05
+                    ax.set_ylim(ymin - margin, ymax + margin)
+            # Slightly raise the subplot titles for better spacing
+            ax.set_title(title, pad=22)
+            ax.grid(axis="y", alpha=0.25, linestyle="--", linewidth=0.8)
+
+        # λ panel
+        _draw(axes[0], lam_data, lam_ticks, lam_colors, title="Langton λ")
+
+        # Entropy panel
+        _draw(axes[1], ent_data, ent_ticks, ent_colors, title="Average cell entropy")
+
+        # Coverage panel with constrained y-range similar to dedicated plot
+        cov_max = max(float(values.max()) for values in cov_data)
+        cov_upper = min(1.0, cov_max + 0.03)
+        _draw(axes[2], cov_data, cov_ticks, cov_colors, title="Query window coverage (weighted)", ylim=(0.5, cov_upper))
+
+        fig.subplots_adjust(left=0.06, right=0.99, top=0.86, bottom=0.18, wspace=0.28)
+        fig.savefig(output_path)
+        plt.close(fig)
+    return output_path
+
+
 def plot_split_sizes(df: pd.DataFrame, output_dir: Path) -> Path:
     counts = (
         df.groupby("split")
@@ -803,8 +1011,11 @@ def generate_plots(df: pd.DataFrame, output_dir: Path) -> List[Path]:
         lambda df_, out: plot_family_mix(df_, out, summary_path=out / "family_mix_per_split.json"),
         lambda df_, out: plot_lambda_mix(df_, out, summary_path=out / "lambda_mix_per_split.json"),
         plot_entropy_boxplot,
+        plot_entropy_violin,
         plot_lambda_boxplot,
         plot_query_window_coverage_boxplot,
+        plot_query_window_coverage_violin,
+        plot_lambda_entropy_coverage_violin_joint,
         plot_family_pies,
     ]
     outputs: List[Path] = []

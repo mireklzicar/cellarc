@@ -13,7 +13,7 @@ pip install cellarc
 ```
 
 For generation and simulation features (JAX/CAX-based rule runners, automatic
-dataset synthesis, Hugging Face integration) install the full extra:
+dataset synthesis) install the full extra:
 
 ```bash
 pip install cellarc[all]
