@@ -12,7 +12,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax import nnx
-from jax.errors import JaxRuntimeError
+
+try:  # JaxRuntimeError only exists on newer JAX releases.
+    from jax.errors import JaxRuntimeError  # type: ignore
+except ImportError:  # pragma: no cover - fallback for older wheels
+    class JaxRuntimeError(RuntimeError):
+        """Fallback when `jax.errors.JaxRuntimeError` is missing."""
+
+        pass
 
 from cax.core import ComplexSystem, Input, State
 from cax.core.perceive import ConvPerceive
