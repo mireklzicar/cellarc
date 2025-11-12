@@ -1,7 +1,7 @@
 # cellarc
 
 This repository contains dataset generation pipeline for CellARC:
-- Model training and baselines: https://github.com/mireklzicar/cellarc 
+- Model training and baselines: https://github.com/mireklzicar/cellarc_baselines 
 - Website: https://cellarc.mireklzicar.com/
 
 ![](assets/ca_demo.png)
