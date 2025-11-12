@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cellarc"
-version = "0.1.1"
+version = "0.1.2"
 description = "Generation and manipulation of cellular automata datasets"
 readme = "README.md"
 authors = [
